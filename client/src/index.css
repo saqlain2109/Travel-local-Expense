@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #3b82f6;
+  /* Blue */
+  --color-secondary: #f59e0b;
+  /* Amber */
+  --color-dark: #1f2937;
+  /* Gray-900 */
+  --color-glass: rgba(255, 255, 255, 0.9);
+  /* Opaque White for Light Mode */
+  --font-sans: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-100 text-gray-900 font-sans antialiased;
+  }
+}
+
+.glass-panel {
+  @apply bg-white border border-gray-200 rounded-lg shadow-sm;
+}
+
+.btn-primary {
+  @apply bg-primary hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-indigo-500/50;
+}
+
+.input-field {
+  @apply w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all placeholder:text-slate-500;
+  padding-left: 2.5rem;
+  /* Ensure space for icon */
+}

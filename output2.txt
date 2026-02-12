@@ -1,0 +1,9 @@
+--- Starting Verification (HTTP) ---
+Seeding database...
+Logging in as John...
+John logged in. ID: 3, Dept: IT
+Submitting claim for John...
+--- Verification FAILED ---
+Error: Claim submission failed
+    at run (C:\Users\saqlain-admin\Desktop\Travel-Local Expense claim\verify_backend_http.js:70:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

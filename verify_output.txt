@@ -1,0 +1,22 @@
+--- Starting Multi-Level Verification ---
+[PASS] Admin Login
+Creating users...
+[PASS] Create User A
+[PASS] Create User B
+[PASS] Create Disabled User
+[PASS] Create Employee
+Setting up Matrix...
+[PASS] Set Matrix Level 1
+[PASS] Set Matrix Level 2
+Submitting Claim...
+[PASS] Submit Claim
+[PASS] Claim correctly assigned to Level 1 (User A)
+Level 1 Approval...
+[PASS] User A Approve
+[PASS] Claim moved to Level 2 (User B)
+Level 2 Approval...
+[PASS] User B Approve
+[PASS] Claim fully approved
+Testing Disabled Login...
+[PASS] Disabled user blocked (403 Forbidden)
+--- Verification PASSED ---

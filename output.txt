@@ -1,0 +1,9 @@
+--- Starting Verification (HTTP) ---
+Seeding database...
+Logging in as John...
+--- Verification FAILED ---
+Error: Request failed with status 500: {"error":"ApprovalMatrix is not defined"}
+    at IncomingMessage.<anonymous> (C:\Users\saqlain-admin\Desktop\Travel-Local Expense claim\verify_backend_http.js:29:28)
+    at IncomingMessage.emit (node:events:530:35)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
