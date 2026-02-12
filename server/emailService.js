@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Create Transporter using SMTP settings from .env
 const transporter = nodemailer.createTransport({
@@ -83,7 +84,7 @@ const sendApprovalRequestEmail = async (approver, claim, requesterName) => {
             </div>
 
             <p>Please log in to the dashboard to Approve or Reject this claim.</p>
-            <a href="http://localhost:3000/dashboard" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Dashboard</a>
+            <a href="${FRONTEND_URL}/dashboard" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Dashboard</a>
             
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
             <p style="font-size: 12px; color: #94a3b8;">This is an automated message.</p>
@@ -153,7 +154,7 @@ const sendRegistrationApprovalRequest = async (admin, newUser) => {
             </div>
 
             <p>Please log in to the Admin Dashboard to activate this user.</p>
-            <a href="http://localhost:3000/employee-management" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Manage Employees</a>
+            <a href="${FRONTEND_URL}/employee-management" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Manage Employees</a>
         </div>
     `;
     return sendEmail(admin.email, subject, html);
@@ -180,7 +181,7 @@ module.exports = {
                     <p><strong>Status:</strong> <span style="color: #16a34a; font-weight: bold;">Approved</span></p>
                 </div>
 
-                <a href="http://localhost:3000/claim/${claim.id}" style="display: inline-block; background-color: #475569; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Claim</a>
+                <a href="${FRONTEND_URL}/claim/${claim.id}" style="display: inline-block; background-color: #475569; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Claim</a>
             </div>
         `;
         return sendEmail(user.email, subject, html);
@@ -202,7 +203,7 @@ module.exports = {
 
                 <p style="color: #d97706;"><strong>Important:</strong> Please log in and change your password immediately.</p>
                 
-                <a href="http://localhost:3000" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login Now</a>
+                <a href="${FRONTEND_URL}" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login Now</a>
             </div>
         `;
         return sendEmail(user.email, subject, html);
