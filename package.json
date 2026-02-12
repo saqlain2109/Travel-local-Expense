@@ -128,7 +128,9 @@
   },
   "devDependencies": {},
   "scripts": {
-    "start": "node dev.js",
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "cd server && node index.js",
     "server": "cd server && npx nodemon index.js",
     "client": "cd client && npm run dev",
     "build": "cd client && npm install && npm run build && cd ../server && npm install"
