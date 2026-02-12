@@ -1,4 +1,8 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Auto-detect API URL:
+// - If VITE_API_URL is set (Env Var), use it.
+// - If running on localhost, assume Backend is on port 5000.
+// - Otherwise (Production), use relative path '/api' (Backend serves Frontend).
+const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api');
 
 export const api = {
     login: async (username, password) => {
