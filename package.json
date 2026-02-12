@@ -128,7 +128,6 @@
   },
   "devDependencies": {},
   "scripts": {
-  "scripts": {
     "dev": "node dev.js",
     "start": "cd server && node index.js",
     "server": "cd server && npx nodemon index.js",
