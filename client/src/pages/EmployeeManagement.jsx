@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Shield, Plus, X, Search, Trash2, Edit2, Check, CheckCircle, XCircle, ArrowRight, Building } from 'lucide-react';
+import { User, Mail, Shield, Plus, X, Search, Trash2, Edit2, Check, CheckCircle, XCircle, ArrowRight, Building, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 
 const EmployeeManagement = () => {
@@ -10,6 +10,7 @@ const EmployeeManagement = () => {
     const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingUserId, setEditingUserId] = useState(null);
+    const [togglingId, setTogglingId] = useState(null);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -84,13 +85,25 @@ const EmployeeManagement = () => {
         setIsModalOpen(true);
     };
 
+    // Instant Responsive Status Toggle (Optimistic Update)
     const handleToggleActive = async (id, currentStatus) => {
+        if (togglingId) return; // Prevent multiple rapid clicks
+        
+        const newStatus = !currentStatus;
+        
+        // 1. Instantly flip state in UI (0ms delay)
+        setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: newStatus } : u));
+        setTogglingId(id);
+
         try {
-            const isActive = currentStatus === undefined ? true : currentStatus;
-            await api.updateUser(id, { isActive: !isActive });
-            fetchData();
+            await api.updateUser(id, { isActive: newStatus });
         } catch (error) {
-            console.error("Failed to update user", error);
+            console.error("Failed to update user status", error);
+            // 2. Revert back if API failed
+            setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: currentStatus } : u));
+            alert("Failed to update status. Please try again.");
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -229,16 +242,20 @@ const EmployeeManagement = () => {
                                 </div>
 
                                 <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700/80">
+                                    {/* 1-Tap Status Switch */}
                                     <button
+                                        type="button"
+                                        disabled={togglingId === u.id}
                                         onClick={() => handleToggleActive(u.id, u.isActive)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 ${
                                             u.isActive
-                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 hover:bg-green-200'
+                                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200'
                                         }`}
                                     >
-                                        <Shield className="w-3.5 h-3.5" />
-                                        <span>{u.isActive ? 'Active' : 'Pending Approval'}</span>
+                                        <div className={`w-2.5 h-2.5 rounded-full ${u.isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                                        <span>{u.isActive ? 'Active Account' : 'Disabled'}</span>
+                                        {togglingId === u.id && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
                                     </button>
 
                                     <div className="flex items-center gap-2">
@@ -263,7 +280,7 @@ const EmployeeManagement = () => {
                                     <th className="py-3.5 px-6">Email</th>
                                     <th className="py-3.5 px-6">Department</th>
                                     <th className="py-3.5 px-6">Role</th>
-                                    <th className="py-3.5 px-6">Status</th>
+                                    <th className="py-3.5 px-6">Status (1-Click Toggle)</th>
                                     <th className="py-3.5 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -291,16 +308,21 @@ const EmployeeManagement = () => {
                                             </span>
                                         </td>
                                         <td className="py-4 px-6">
+                                            {/* 1-Tap Status Switch */}
                                             <button
+                                                type="button"
+                                                disabled={togglingId === u.id}
                                                 onClick={() => handleToggleActive(u.id, u.isActive)}
-                                                className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 ${
                                                     u.isActive
-                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 hover:bg-green-200'
+                                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200'
                                                 }`}
+                                                title={u.isActive ? "Click to Disable Employee" : "Click to Activate Employee"}
                                             >
-                                                <Shield className="w-3.5 h-3.5" />
-                                                <span>{u.isActive ? 'Active' : 'Disabled / Pending'}</span>
+                                                <div className={`w-2.5 h-2.5 rounded-full ${u.isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                                                <span>{u.isActive ? 'Active' : 'Disabled'}</span>
+                                                {togglingId === u.id && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
                                             </button>
                                         </td>
                                         <td className="py-4 px-6 text-right">
