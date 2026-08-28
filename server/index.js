@@ -515,11 +515,15 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n=================================================`);
-  console.log(`🚀 Expense Claim System is LIVE and RUNNING!`);
-  console.log(`🔗 Web Application: http://localhost:${PORT}`);
-  console.log(`🔗 Backend API:     http://localhost:${PORT}/api`);
-  console.log(`=================================================\n`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n=================================================`);
+    console.log(`🚀 Expense Claim System is LIVE and RUNNING!`);
+    console.log(`🔗 Web Application: http://localhost:${PORT}`);
+    console.log(`🔗 Backend API:     http://localhost:${PORT}/api`);
+    console.log(`=================================================\n`);
+  });
+}
+
+module.exports = app;
 

@@ -14,10 +14,14 @@ require('module').Module._initPaths();
 
 const { Sequelize, DataTypes } = require('sequelize');
 
-// Using SQLite for easy local setup. Change dialect to 'postgres' for PostgreSQL.
+// Using SQLite for easy local setup. On Vercel, use /tmp/database.sqlite
+const defaultDbStorage = process.env.VERCEL
+    ? path.join('/tmp', 'database.sqlite')
+    : path.join(__dirname, 'database.sqlite');
+
 const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite'),
+    storage: process.env.DB_STORAGE || defaultDbStorage,
     logging: false
 });
 
