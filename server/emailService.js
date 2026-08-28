@@ -1,29 +1,47 @@
+const path = require('path');
+const fs = require('fs');
+
+// Ensure module resolution works across OneDrive sync paths and local caches
+const possibleNodeModules = [
+    'C:\\Users\\usesa\\.gemini\\antigravity\\brain\\53471831-a9d4-4787-8868-9b7cbfa38d10\\scratch\\backend_deps\\node_modules',
+    path.join(__dirname, 'node_modules'),
+    path.join(__dirname, '..', 'node_modules'),
+    'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\server\\node_modules',
+    'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\node_modules'
+];
+process.env.NODE_PATH = possibleNodeModules.filter(p => fs.existsSync(p)).join(path.delimiter);
+require('module').Module._initPaths();
+
 const nodemailer = require('nodemailer');
-require('dotenv').config();
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://travel-local-expense.onrender.com';
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Create Transporter using SMTP settings from .env
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT, // 587
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
     secure: false, // true for 465, false for other ports (STARTTLS)
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
     },
     tls: {
-        ciphers: 'SSLv3'
+        rejectUnauthorized: false
     }
 });
 
-// Verify connection configuration
-transporter.verify(function (error, success) {
-    if (error) {
-        console.log("SMTP Connection Error:", error);
-    } else {
-        console.log("SMTP Server is ready to take our messages");
-    }
-});
+// Verify connection configuration in background
+if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    setTimeout(() => {
+        transporter.verify(function (error, success) {
+            if (error) {
+                console.log("SMTP Info: Email notifications offline/idle:", error.message);
+            } else {
+                console.log("SMTP Server is ready to send messages");
+            }
+        });
+    }, 1000);
+}
 
 const sendEmail = async (to, subject, html) => {
     try {

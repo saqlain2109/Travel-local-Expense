@@ -130,28 +130,12 @@ export const api = {
         const response = await fetch(`${API_URL}/matrix`);
         return response.json();
     },
-    createMatrix: async (data) => {
-        const response = await fetch(`${API_URL}/matrix`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error || 'Failed to create matrix rule');
-        }
-        return response.json();
-    },
     updateMatrix: async (data) => {
         const response = await fetch(`${API_URL}/matrix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error || 'Failed to update matrix rule');
-        }
         return response.json();
     },
     deleteMatrix: async (id) => {
@@ -162,6 +146,8 @@ export const api = {
     // Get Single Claim
     getClaim: async (id) => {
         const response = await fetch(`${API_URL}/claims/${id}`);
+        if (!response.ok) throw new Error('Failed to fetch claim');
+        return response.json();
         if (!response.ok) throw new Error('Failed to fetch claim');
         return response.json();
     },

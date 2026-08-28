@@ -1,10 +1,23 @@
-const { Sequelize, DataTypes } = require('sequelize');
 const path = require('path');
+const fs = require('fs');
+
+// Ensure module resolution works across OneDrive sync paths and local caches
+const possibleNodeModules = [
+    'C:\\Users\\usesa\\.gemini\\antigravity\\brain\\53471831-a9d4-4787-8868-9b7cbfa38d10\\scratch\\backend_deps\\node_modules',
+    path.join(__dirname, 'node_modules'),
+    path.join(__dirname, '..', 'node_modules'),
+    'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\server\\node_modules',
+    'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\node_modules'
+];
+process.env.NODE_PATH = possibleNodeModules.filter(p => fs.existsSync(p)).join(path.delimiter);
+require('module').Module._initPaths();
+
+const { Sequelize, DataTypes } = require('sequelize');
 
 // Using SQLite for easy local setup. Change dialect to 'postgres' for PostgreSQL.
 const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: path.join(__dirname, 'database.sqlite'),
+    storage: process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite'),
     logging: false
 });
 
@@ -86,4 +99,62 @@ const seedDatabase = async () => {
     console.log('Database seeded with fresh data!');
 };
 
-module.exports = { sequelize, User, Claim, ApprovalMatrix, seedDatabase };
+const getDashboardStats = async (userId, role) => {
+    const whereClause = {};
+    if (role !== 'admin' && userId) {
+        whereClause.UserId = userId;
+    }
+
+    // 1. Total Requests & Amounts
+    const claims = await Claim.findAll({ where: whereClause });
+    const totalRequests = claims.length;
+    const totalAmount = claims
+        .filter(c => c.status === 'Approved')
+        .reduce((sum, c) => sum + c.amount, 0);
+
+    // 2. Status Counts
+    const statusCounts = {
+        Pending: claims.filter(c => c.status === 'Pending').length,
+        Approved: claims.filter(c => c.status === 'Approved').length,
+        Rejected: claims.filter(c => c.status === 'Rejected').length
+    };
+
+    // 3. Monthly Stats (Last 6 Months)
+    const monthlyStats = [];
+    const today = new Date();
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthLabel = d.toLocaleString('default', { month: 'short' });
+        const year = d.getFullYear();
+        const monthIdx = d.getMonth();
+
+        const monthlyAmount = claims
+            .filter(c => {
+                const cDate = new Date(c.date);
+                return c.status === 'Approved' &&
+                    cDate.getMonth() === monthIdx &&
+                    cDate.getFullYear() === year;
+            })
+            .reduce((sum, c) => sum + c.amount, 0);
+
+        monthlyStats.push({ name: monthLabel, amount: monthlyAmount });
+    }
+
+    // 4. Recent Activity
+    const recentActivity = await Claim.findAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        limit: 5,
+        include: [{ model: User, attributes: ['name'] }]
+    });
+
+    return {
+        totalRequests,
+        totalAmount,
+        statusCounts,
+        monthlyStats,
+        recentActivity
+    };
+};
+
+module.exports = { sequelize, User, Claim, ApprovalMatrix, seedDatabase, getDashboardStats };

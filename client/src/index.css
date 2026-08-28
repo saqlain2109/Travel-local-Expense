@@ -1,33 +1,50 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #3b82f6;
-  /* Blue */
   --color-secondary: #f59e0b;
-  /* Amber */
   --color-dark: #1f2937;
-  /* Gray-900 */
   --color-glass: rgba(255, 255, 255, 0.9);
-  /* Opaque White for Light Mode */
   --font-sans: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
 }
 
 @layer base {
   body {
-    @apply bg-gray-100 text-gray-900 font-sans antialiased;
+    @apply bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased selection:bg-blue-500 selection:text-white;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 .glass-panel {
-  @apply bg-white border border-gray-200 rounded-lg shadow-sm;
+  @apply bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-sm;
 }
 
 .btn-primary {
-  @apply bg-primary hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-indigo-500/50;
+  @apply bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white px-4 py-2.5 rounded-xl font-medium transition-all duration-200 shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 flex items-center justify-center gap-2;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-[0.98] text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2;
 }
 
 .input-field {
-  @apply w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all placeholder:text-slate-500;
-  padding-left: 2.5rem;
-  /* Ensure space for icon */
+  @apply w-full bg-white dark:bg-gray-800/90 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm md:text-base;
+}
+
+/* Mobile Safe Area Padding */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
 }

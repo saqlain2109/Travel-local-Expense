@@ -1,29 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Shield, Plus, X, Search, MoreVertical, Trash2, Edit2 } from 'lucide-react';
+import { User, Mail, Shield, Plus, X, Search, Trash2, Edit2, Check, CheckCircle, XCircle, ArrowRight, Building } from 'lucide-react';
 import { api } from '../services/api';
 
 const EmployeeManagement = () => {
-    const [activeTab, setActiveTab] = useState('employees'); // 'employees' or 'matrix'
+    const [activeTab, setActiveTab] = useState('employees');
     const [users, setUsers] = useState([]);
     const [matrix, setMatrix] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [editingUserId, setEditingUserId] = useState(null);
 
-    // Employee Form Data
     const [formData, setFormData] = useState({
         name: '',
         username: '',
         email: '',
         password: '',
         role: 'user',
-        department: '' // New field
+        department: ''
     });
 
-    // Matrix Form Data
     const [matrixFormData, setMatrixFormData] = useState({
         department: '',
-        approverId: ''
+        approverId: '',
+        level: 1
     });
 
     const fetchData = async () => {
@@ -48,9 +48,6 @@ const EmployeeManagement = () => {
         setMatrixFormData({ ...matrixFormData, [e.target.name]: e.target.value });
     };
 
-    const [editingUserId, setEditingUserId] = useState(null);
-
-    // --- Employee Handlers ---
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -68,15 +65,15 @@ const EmployeeManagement = () => {
         }
     };
 
-    const handleEditClick = (user) => {
-        setEditingUserId(user.id);
+    const handleEditClick = (u) => {
+        setEditingUserId(u.id);
         setFormData({
-            name: user.name,
-            username: user.username,
-            email: user.email,
-            password: user.password || '',
-            role: user.role,
-            department: user.department || ''
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            password: u.password || '',
+            role: u.role,
+            department: u.department || ''
         });
         setIsModalOpen(true);
     };
@@ -98,142 +95,220 @@ const EmployeeManagement = () => {
     };
 
     const handleDeleteUser = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
-        try {
-            await api.deleteUser(id);
-            fetchData();
-        } catch (error) {
-            console.error("Failed to delete user", error);
+        if (window.confirm("Are you sure you want to delete this employee?")) {
+            try {
+                await api.deleteUser(id);
+                fetchData();
+            } catch (error) {
+                console.error("Failed to delete user", error);
+            }
         }
     };
 
-    // --- Matrix Handlers ---
     const handleMatrixSubmit = async (e) => {
         e.preventDefault();
         try {
-            await api.updateMatrix(matrixFormData);
+            await api.createMatrix(matrixFormData);
             setIsMatrixModalOpen(false);
-            setMatrixFormData({ department: '', approverId: '' });
+            setMatrixFormData({ department: '', approverId: '', level: 1 });
             fetchData();
         } catch (error) {
-            console.error("Failed to save matrix rule", error);
+            console.error("Failed to add matrix rule", error);
         }
     };
 
     const handleDeleteMatrix = async (id) => {
-        if (!window.confirm("Delete this approval rule?")) return;
-        try {
-            await api.deleteMatrix(id);
-            fetchData();
-        } catch (error) {
-            console.error("Failed to delete matrix rule", error);
+        if (window.confirm("Remove this approval rule?")) {
+            try {
+                await api.deleteMatrix(id);
+                fetchData();
+            } catch (error) {
+                console.error("Failed to delete matrix rule", error);
+            }
         }
     };
 
-    const filteredUsers = users.filter(user =>
-        (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
-        (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
-        (user.department?.toLowerCase().includes(searchTerm.toLowerCase()) || '')
+    const filteredUsers = users.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.department || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
-        <div className="max-w-7xl mx-auto py-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="space-y-6">
+            {/* Page Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">System Management</h1>
-                    <p className="text-gray-500 mt-1">Manage employees and approval workflows.</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Employee & Workflow Settings</h1>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage user accounts, roles and department approval matrix</p>
                 </div>
 
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button
-                        onClick={() => setActiveTab('employees')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'employees' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                    >
-                        Employees
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('matrix')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'matrix' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                    >
-                        Approval Matrix
-                    </button>
+                <div className="flex items-center gap-2">
+                    {activeTab === 'employees' ? (
+                        <button
+                            onClick={handleAddNew}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md shadow-blue-500/20 transition-all w-full sm:w-auto"
+                        >
+                            <Plus className="w-4 h-4" /> Add Employee
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setIsMatrixModalOpen(true)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md shadow-indigo-500/20 transition-all w-full sm:w-auto"
+                        >
+                            <Plus className="w-4 h-4" /> Add Approval Rule
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {activeTab === 'employees' ? (
-                <>
-                    <div className="flex justify-between items-center mb-6">
-                        {/* Search */}
-                        <div className="bg-white p-2 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 w-full max-w-md">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search employees..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-1.5 border-none rounded-lg focus:outline-none focus:ring-0 text-sm"
-                                />
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleAddNew}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2"
-                        >
-                            <Plus className="w-5 h-5" /> Add Employee
-                        </button>
+            {/* Tab Navigation */}
+            <div className="flex bg-gray-200/70 dark:bg-gray-800 p-1 rounded-2xl w-full sm:w-max">
+                <button
+                    onClick={() => setActiveTab('employees')}
+                    className={`flex-1 sm:flex-initial px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                        activeTab === 'employees'
+                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                    }`}
+                >
+                    Team Members ({users.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('matrix')}
+                    className={`flex-1 sm:flex-initial px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                        activeTab === 'matrix'
+                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                    }`}
+                >
+                    Approval Matrix ({matrix.length})
+                </button>
+            </div>
+
+            {/* Tab 1: Employees Directory */}
+            {activeTab === 'employees' && (
+                <div className="space-y-4">
+                    {/* Search input */}
+                    <div className="relative w-full sm:max-w-md">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="text"
+                            placeholder="Search employee name, department, email..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                        />
                     </div>
 
-                    {/* Users Table */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50/50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Employee</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Role</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Department</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Actions</th>
+                    {/* Mobile View: Cards */}
+                    <div className="grid grid-cols-1 gap-3 md:hidden">
+                        {filteredUsers.map(u => (
+                            <div key={u.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                                            {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-sm text-gray-900 dark:text-white">{u.name}</h4>
+                                            <span className="text-xs text-gray-400">@{u.username}</span>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
+                                        u.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                    }`}>
+                                        {u.role}
+                                    </span>
+                                </div>
+
+                                <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
+                                    <p className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-gray-400" /> {u.email}</p>
+                                    <p className="flex items-center gap-1.5"><Building className="w-3.5 h-3.5 text-gray-400" /> Dept: <strong>{u.department || 'Unassigned'}</strong></p>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700/80">
+                                    <button
+                                        onClick={() => handleToggleActive(u.id, u.isActive)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                            u.isActive
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                        }`}
+                                    >
+                                        <Shield className="w-3.5 h-3.5" />
+                                        <span>{u.isActive ? 'Active' : 'Pending Approval'}</span>
+                                    </button>
+
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => handleEditClick(u)} className="p-2 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-gray-500 hover:text-red-600">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    <th className="py-3.5 px-6">Employee</th>
+                                    <th className="py-3.5 px-6">Email</th>
+                                    <th className="py-3.5 px-6">Department</th>
+                                    <th className="py-3.5 px-6">Role</th>
+                                    <th className="py-3.5 px-6">Status</th>
+                                    <th className="py-3.5 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {filteredUsers.map((user) => (
-                                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
+                                {filteredUsers.map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
+                                        <td className="py-4 px-6 font-medium text-gray-900 dark:text-white">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                                                    {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+                                                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs">
+                                                    {u.name.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <p className="font-medium text-sm text-gray-900">{user.name}</p>
-                                                    <p className="text-xs text-gray-500">{user.email}</p>
+                                                    <span className="block font-semibold">{u.name}</span>
+                                                    <span className="text-xs text-gray-400">@{u.username}</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize border
-                                                ${user.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                                                {user.role}
+                                        <td className="py-4 px-6 text-gray-600 dark:text-gray-300">{u.email}</td>
+                                        <td className="py-4 px-6 text-gray-600 dark:text-gray-300">{u.department || '—'}</td>
+                                        <td className="py-4 px-6">
+                                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                                                u.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                            }`}>
+                                                {u.role}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">
-                                            {user.department || <span className="text-gray-400 italic">None</span>}
+                                        <td className="py-4 px-6">
+                                            <button
+                                                onClick={() => handleToggleActive(u.id, u.isActive)}
+                                                className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+                                                    u.isActive
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                }`}
+                                            >
+                                                <Shield className="w-3.5 h-3.5" />
+                                                <span>{u.isActive ? 'Active' : 'Disabled / Pending'}</span>
+                                            </button>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className={`flex items-center gap-1.5 text-xs font-medium ${user.isActive !== false ? 'text-green-600' : 'text-red-600'}`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${user.isActive !== false ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                                {user.isActive !== false ? 'Active' : 'Disabled'}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <button onClick={() => handleEditClick(user)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors">
+                                        <td className="py-4 px-6 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button onClick={() => handleEditClick(u)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleToggleActive(user.id, user.isActive)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors">
-                                                    <Shield className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDeleteUser(user.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors">
+                                                <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -243,153 +318,132 @@ const EmployeeManagement = () => {
                             </tbody>
                         </table>
                     </div>
-                </>
-            ) : (
-                <>
-                    <div className="flex justify-between items-center mb-6">
-                        <div>
-                            <h2 className="text-lg font-bold text-gray-900">Approval Matrix</h2>
-                            <p className="text-sm text-gray-500">Define which users approve claims for each department.</p>
-                        </div>
-                        <button
-                            onClick={() => setIsMatrixModalOpen(true)}
-                            className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2"
-                        >
-                            <Plus className="w-5 h-5" /> Add Rule
-                        </button>
-                    </div>
+                </div>
+            )}
 
-                    {/* Tree View for Matrix */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Object.entries(matrix.reduce((acc, item) => {
-                            (acc[item.department] = acc[item.department] || []).push(item);
-                            return acc;
-                        }, {})).map(([dept, rules]) => {
-                            // Sort rules by level
-                            const sortedRules = rules.sort((a, b) => (a.level || 1) - (b.level || 1));
+            {/* Tab 2: Approval Matrix Workflow */}
+            {activeTab === 'matrix' && (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {matrix.map(rule => (
+                            <div key={rule.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-xl">
+                                        Level {rule.level || 1} Approver
+                                    </span>
+                                    <button onClick={() => handleDeleteMatrix(rule.id)} className="text-gray-400 hover:text-red-500 p-1">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
 
-                            return (
-                                <div key={dept} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-lg text-gray-800">{dept}</h3>
-                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{sortedRules.length} Steps</span>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <Building className="w-4 h-4 text-gray-400" />
+                                        <span>Department: <strong className="text-gray-900 dark:text-white">{rule.department}</strong></span>
                                     </div>
-
-                                    <div className="space-y-0">
-                                        {sortedRules.map((rule, index) => (
-                                            <div key={rule.id} className="relative pl-4 pb-6 last:pb-0">
-                                                {/* Connecting Line */}
-                                                {index !== sortedRules.length - 1 && (
-                                                    <div className="absolute left-[27px] top-8 bottom-0 w-0.5 bg-gray-200"></div>
-                                                )}
-
-                                                <div className="flex items-start gap-3 group">
-                                                    {/* Step Indicators */}
-                                                    <div className="relative z-10 w-6 h-6 rounded-full bg-blue-50 border-2 border-blue-500 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0 mt-1">
-                                                        {rule.level || 1}
-                                                    </div>
-
-                                                    {/* Card */}
-                                                    <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-200 flex justify-between items-center hover:border-blue-300 transition-colors">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
-                                                                {rule.Approver?.name?.charAt(0) || '?'}
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-sm font-semibold text-gray-900">{rule.Approver?.name || 'Unknown'}</p>
-                                                                <p className="text-xs text-gray-500">{rule.Approver?.role || 'Approver'}</p>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleDeleteMatrix(rule.id)}
-                                                            className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
-                                                            title="Remove Rule"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Down Arrow for flow */}
-                                                {index !== sortedRules.length - 1 && (
-                                                    <div className="ml-[22px] mt-1 text-gray-300">▼</div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Add Next Step Button (Optional, enables quick add for this dept) */}
-                                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-center">
-                                        <button
-                                            onClick={() => {
-                                                const nextLevel = (sortedRules[sortedRules.length - 1]?.level || 0) + 1;
-                                                setMatrixFormData({ department: dept, approverId: '', level: nextLevel });
-                                                setIsMatrixModalOpen(true);
-                                            }}
-                                            className="text-xs text-blue-600 font-medium hover:text-blue-800 flex items-center gap-1"
-                                        >
-                                            <Plus className="w-3 h-3" /> Add Next Level
-                                        </button>
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <Shield className="w-4 h-4 text-blue-500" />
+                                        <span>Assigned To: <strong className="text-gray-900 dark:text-white">{rule.Approver?.name || 'Manager'}</strong></span>
                                     </div>
                                 </div>
-                            );
-                        })}
-
-                        {/* Empty State */}
-                        {Object.keys(matrix).length === 0 && (
-                            <div className="col-span-full py-12 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                <p>No approval flows defined correctly.</p>
-                                <button onClick={() => setIsMatrixModalOpen(true)} className="mt-2 text-blue-600 font-medium hover:underline">Create your first flow</button>
                             </div>
-                        )}
+                        ))}
                     </div>
-                </>
+                </div>
             )}
 
             {/* Employee Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-100">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <h3 className="text-lg font-bold text-gray-900">{editingUserId ? 'Edit Employee' : 'Add New Employee'}</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {editingUserId ? 'Edit Employee' : 'Add New Employee'}
+                            </h3>
+                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
-                                <input required name="name" type="text" value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Username</label>
-                                    <input required name="username" type="text" value={formData.username} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Password</label>
-                                    <input required name="password" type="password" value={formData.password} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" placeholder={editingUserId ? "(Unchanged)" : ""} />
-                                </div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    required
+                                    value={formData.name}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Email</label>
-                                <input required name="email" type="email" value={formData.email} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Username</label>
+                                <input
+                                    type="text"
+                                    name="username"
+                                    required
+                                    value={formData.username}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Role</label>
-                                    <select name="role" value={formData.role} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white">
-                                        <option value="user">User</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Department</label>
-                                    <input name="department" type="text" value={formData.department} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" placeholder="e.g. IT" />
-                                </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Email</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    required
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                />
                             </div>
-                            <div className="pt-4 flex gap-3 justify-end border-t border-gray-100 mt-2">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm">Save Changes</button>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Department</label>
+                                <input
+                                    type="text"
+                                    name="department"
+                                    placeholder="e.g. IT, Finance, HR, Sales"
+                                    value={formData.department}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Password</label>
+                                <input
+                                    type="password"
+                                    name="password"
+                                    required={!editingUserId}
+                                    placeholder={editingUserId ? 'Leave blank to keep current' : ''}
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Role</label>
+                                <select
+                                    name="role"
+                                    value={formData.role}
+                                    onChange={handleChange}
+                                    className="input-field"
+                                >
+                                    <option value="user">Employee (User)</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="btn-secondary flex-1"
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary flex-1">
+                                    Save Employee
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -398,55 +452,68 @@ const EmployeeManagement = () => {
 
             {/* Matrix Rule Modal */}
             {isMatrixModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-100">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                            <h3 className="text-lg font-bold text-gray-900">Add Approval Rule</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                Add Approval Matrix Rule
+                            </h3>
+                            <button onClick={() => setIsMatrixModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
-                        <form onSubmit={handleMatrixSubmit} className="p-6 space-y-4">
+                        <form onSubmit={handleMatrixSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Department</label>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Department</label>
                                 <input
-                                    required
-                                    name="department"
                                     type="text"
+                                    name="department"
+                                    required
+                                    placeholder="e.g. IT, Finance, Marketing"
                                     value={matrixFormData.department}
                                     onChange={handleMatrixChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                    placeholder="e.g. Marketing"
+                                    className="input-field"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Approval Level</label>
-                                <input
-                                    required
-                                    name="level"
-                                    type="number"
-                                    min="1"
-                                    value={matrixFormData.level || 1}
-                                    onChange={handleMatrixChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">1 = First Approver, 2 = Second Approver, etc.</p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Approver</label>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Assigned Approver</label>
                                 <select
-                                    required
                                     name="approverId"
+                                    required
                                     value={matrixFormData.approverId}
                                     onChange={handleMatrixChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white"
+                                    className="input-field"
                                 >
-                                    <option value="">Select an Approver</option>
-                                    {users.filter(u => u.isActive !== false).map(user => (
-                                        <option key={user.id} value={user.id}>{user.name} ({user.role})</option>
+                                    <option value="">Select Approver</option>
+                                    {users.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name} ({u.role}) - {u.department || 'No Dept'}</option>
                                     ))}
                                 </select>
                             </div>
-                            <div className="pt-4 flex gap-3 justify-end border-t border-gray-100 mt-2">
-                                <button type="button" onClick={() => setIsMatrixModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                                <button type="submit" className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium shadow-sm">Add Rule</button>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Approval Level</label>
+                                <select
+                                    name="level"
+                                    value={matrixFormData.level}
+                                    onChange={handleMatrixChange}
+                                    className="input-field"
+                                >
+                                    <option value="1">Level 1 (Direct Manager)</option>
+                                    <option value="2">Level 2 (Department Head)</option>
+                                    <option value="3">Level 3 (Finance / Director)</option>
+                                </select>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMatrixModalOpen(false)}
+                                    className="btn-secondary flex-1"
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary flex-1">
+                                    Save Rule
+                                </button>
                             </div>
                         </form>
                     </div>

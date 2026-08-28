@@ -1,6 +1,21 @@
+const path = require('path');
+const fs = require('fs');
+
+// Ensure module resolution works across OneDrive sync paths and local caches
+const possibleNodeModules = [
+  'C:\\Users\\usesa\\.gemini\\antigravity\\brain\\53471831-a9d4-4787-8868-9b7cbfa38d10\\scratch\\backend_deps\\node_modules',
+  path.join(__dirname, 'node_modules'),
+  path.join(__dirname, '..', 'node_modules'),
+  'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\server\\node_modules',
+  'C:\\Users\\usesa\\OneDrive - MSFT\\Desktop\\Travel-Local Expense claim\\node_modules'
+];
+process.env.NODE_PATH = possibleNodeModules.filter(p => fs.existsSync(p)).join(path.delimiter);
+require('module').Module._initPaths();
+
 const express = require('express');
 const cors = require('cors');
-const { sequelize, User, Claim, ApprovalMatrix, seedDatabase } = require('./db');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { sequelize, User, Claim, ApprovalMatrix, seedDatabase, getDashboardStats } = require('./db');
 const emailService = require('./emailService');
 
 const app = express();
@@ -51,7 +66,11 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Generate Credentials
-    const username = email.split('@')[0];
+    let username = email.split('@')[0];
+    const existingUsername = await User.findOne({ where: { username } });
+    if (existingUsername) {
+      username = `${username}_${Math.floor(1000 + Math.random() * 9000)}`;
+    }
     const password = Math.random().toString(36).slice(-8); // Simple random password
 
     // Create Inactive User
@@ -137,6 +156,18 @@ app.get('/api/claims', async (req, res) => {
     });
     res.json(claims);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Dashboard Stats ---
+app.get('/api/dashboard/summary', async (req, res) => {
+  const { userId, role } = req.query;
+  try {
+    const stats = await getDashboardStats(userId, role);
+    res.json(stats);
+  } catch (error) {
+    console.error("Dashboard Stats Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -314,6 +345,38 @@ app.put('/api/claims/:id/status', async (req, res) => {
   }
 });
 
+// Update Claim Details
+app.put('/api/claims/:id', async (req, res) => {
+  try {
+    const { title, description, amount, date, type, category, startDate, endDate, receiptUrl } = req.body;
+    const claim = await Claim.findByPk(req.params.id);
+
+    if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+    // Update fields
+    if (title) claim.title = title;
+    if (description) claim.description = description;
+    if (amount) claim.amount = amount;
+    if (date) claim.date = date;
+    if (type) claim.type = type;
+    if (category) claim.category = category;
+    if (startDate) claim.startDate = startDate;
+    if (endDate) claim.endDate = endDate;
+    if (receiptUrl) claim.receiptUrl = receiptUrl;
+
+    // Optional: Reset status to Pending if it was Rejected? 
+    // for now, let's keep status as is unless explicitly changed, 
+    // but usually editing a rejected claim implies re-submission.
+    // Let's NOT auto-change status here to keep it simple, 
+    // or arguably, if it's "Edit", it might be fixing a mistake on a Pending claim.
+
+    await claim.save();
+    res.json({ success: true, claim });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Delete Claim
 app.delete('/api/claims/:id', async (req, res) => {
   try {
@@ -434,20 +497,29 @@ app.delete('/api/matrix/:id', async (req, res) => { // In case we want to delete
 // Seed Endpoint (for manual reset)
 app.post('/api/seed', async (req, res) => {
   await seedDatabase();
-  res.json({ message: "Database seeded" });
+  res.json({ success: true, message: "Database seeded" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// --- Serve Frontend ---
+const clientDistCandidates = [
+  path.join(__dirname, '../client/dist'),
+  'C:\\Users\\usesa\\.gemini\\antigravity\\brain\\53471831-a9d4-4787-8868-9b7cbfa38d10\\scratch\\client_deps\\dist'
+];
+const distPath = clientDistCandidates.find(p => fs.existsSync(p)) || clientDistCandidates[0];
 
-// --- Serve Frontend (Production) ---
-const path = require('path');
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, '../client/dist')));
+app.use(express.static(distPath));
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
 app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  res.sendFile(path.join(distPath, 'index.html'));
 });
+
+app.listen(PORT, () => {
+  console.log(`\n=================================================`);
+  console.log(`🚀 Expense Claim System is LIVE and RUNNING!`);
+  console.log(`🔗 Web Application: http://localhost:${PORT}`);
+  console.log(`🔗 Backend API:     http://localhost:${PORT}/api`);
+  console.log(`=================================================\n`);
+});
+

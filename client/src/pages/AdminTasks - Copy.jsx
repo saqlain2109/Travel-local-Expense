@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -8,7 +7,6 @@ import {
 } from 'lucide-react';
 
 const AdminTasks = () => {
-    const navigate = useNavigate();
     const { user } = useAuth();
     const [claims, setClaims] = useState([]);
     const [filterStatus, setFilterStatus] = useState('Pending'); // Default to Pending for tasks
@@ -105,7 +103,7 @@ const AdminTasks = () => {
                             ) : filteredClaims.map((claim) => (
                                 <tr
                                     key={claim.id}
-                                    onClick={() => navigate(`/claim/${claim.id}`)}
+                                    onClick={() => window.location.href = `/claim/${claim.id}`}
                                     className="hover:bg-gray-50 transition-colors group cursor-pointer"
                                 >
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -143,14 +141,14 @@ const AdminTasks = () => {
                                         {claim.status === 'Pending' ? (
                                             <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity">
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); handleStatusUpdate(claim.id, 'Approved'); }}
+                                                    onClick={() => handleStatusUpdate(claim.id, 'Approved')}
                                                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm text-xs"
                                                     title="Approve"
                                                 >
                                                     <CheckCircle className="w-3.5 h-3.5" /> Approve
                                                 </button>
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); handleStatusUpdate(claim.id, 'Rejected'); }}
+                                                    onClick={() => handleStatusUpdate(claim.id, 'Rejected')}
                                                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-red-600 hover:bg-red-50 hover:border-red-100 transition-colors text-xs"
                                                     title="Reject"
                                                 >

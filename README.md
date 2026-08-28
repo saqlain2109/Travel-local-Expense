@@ -1,16 +1,70 @@
-# React + Vite
+# ✈️ Travel & Local Expense Claim Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack enterprise Expense & Travel Claim Management System built with **React**, **Tailwind CSS**, **Node.js/Express**, and **SQLite (Sequelize)**. Designed for desktop, tablet, and mobile with a touch-friendly interface, multi-level department approval matrix, and automated SMTP email alerts.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🌟 Key Features
 
-## React Compiler
+* **📱 Mobile-First UI & Responsive Design:**
+  * Native-like mobile bottom navigation bar with floating action button `(+)`.
+  * Touch-optimized cards for approvals, claim histories, and employee directories.
+  * Responsive KPI dashboard and interactive Recharts data visualizations.
+* **🏢 Dynamic Approval Matrix & Multi-Level Workflows:**
+  * Multi-level hierarchy (Direct Manager $\rightarrow$ Department Head $\rightarrow$ Finance Director).
+  * Auto-routing of submitted claims to department approvers based on business rules.
+* **📬 Automated Email Notifications (Nodemailer SMTP):**
+  * Instant email notifications to requesters upon submission and status updates.
+  * Approver alerts with claim summary and direct action links.
+  * Self-service password reset with temporary secure credentials.
+* **📊 Analytics, Excel Export & PDF Vouchers:**
+  * Department spending breakdown and budget vs actual charts.
+  * One-click Excel report export (`.xlsx`) and printable PDF claim vouchers.
+* **🔐 Role-Based Access Control (RBAC):**
+  * Admin accounts for user management, role activation, and workflow settings.
+  * User/Employee accounts for claim submissions and personal history tracking.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🛠️ Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+* **Frontend:** React 19, Vite, Tailwind CSS, Lucide Icons, GSAP Animations, Recharts, jsPDF, html-to-image, SheetJS (XLSX).
+* **Backend:** Node.js, Express, Sequelize ORM, SQLite, Nodemailer, CORS.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/<your-username>/travel-local-expense-claim.git
+cd travel-local-expense-claim
+```
+
+### 2. Backend Setup
+```bash
+cd server
+npm install
+cp .env.example .env
+# Edit .env with your port and SMTP details if needed
+node index.js
+```
+
+### 3. Frontend Setup
+```bash
+cd ../client
+npm install
+npm run dev
+```
+
+### 4. Default Demo Accounts
+| Role | Username | Password |
+|---|---|---|
+| **Admin** | `admin` | `password` |
+| **Manager (Finance)** | `sarah` | `password` |
+| **Employee** | `john` | `password` |
+
+---
+
+## 📄 License
+This project is open-source and available under the [MIT License](LICENSE).
