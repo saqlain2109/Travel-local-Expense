@@ -261,7 +261,7 @@ const Tasks = () => {
                                 className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                             >
                                 <div
-                                    onClick={() => navigate(`/claims/${claim.id}`)}
+                                    onClick={() => navigate(`/claim/${claim.id}`)}
                                     className="flex items-start sm:items-center gap-3.5 cursor-pointer flex-1"
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
@@ -343,7 +343,7 @@ const Tasks = () => {
                                         )}
 
                                         <button
-                                            onClick={() => navigate(`/claims/${claim.id}`)}
+                                            onClick={() => navigate(`/claim/${claim.id}`)}
                                             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
                                         >
                                             <ChevronRight className="w-5 h-5" />

@@ -36,6 +36,7 @@ function App() {
                             <Route path="/submit-claim" element={<NewExpenseClaim />} />
                             <Route path="/submit-request" element={<NewTravelRequest />} />
                             <Route path="/claim/:id" element={<ClaimDetails />} />
+                            <Route path="/claims/:id" element={<ClaimDetails />} />
                             <Route path="/claims" element={<ClaimsHistory />} />
                             <Route path="/history" element={<ClaimsHistory />} />
                             <Route path="/tasks" element={<Tasks />} />
@@ -47,7 +48,10 @@ function App() {
                             <Route path="/admin" element={<AdminDashboard />} />
                             <Route path="/employees" element={<EmployeeManagement />} />
                             <Route path="/claim/:id" element={<ClaimDetails />} />
+                            <Route path="/claims/:id" element={<ClaimDetails />} />
+                            <Route path="/tasks" element={<Tasks />} />
                             <Route path="/history" element={<ClaimsHistory />} />
+                            <Route path="/claims" element={<ClaimsHistory />} />
                         </Route>
 
                         <Route path="*" element={<Navigate to="/" replace />} />
