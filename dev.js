@@ -34,10 +34,10 @@ const runProcess = (name, command, args, cwd, color) => {
 };
 
 // Start Server
-const server = runProcess('SERVER', 'npm', ['run', 'server'], path.join(__dirname), '\x1b[35m');
+const server = runProcess('SERVER', 'node', ['server/index.js'], path.join(__dirname), '\x1b[35m');
 
 // Start Client
-const client = runProcess('CLIENT', 'npm', ['run', 'client'], path.join(__dirname), '\x1b[34m');
+const client = runProcess('CLIENT', 'npm', ['run', 'dev'], path.join(__dirname, 'client'), '\x1b[34m');
 
 // Handle cleanup
 const cleanup = () => {
