@@ -14,14 +14,24 @@ require('module').Module._initPaths();
 
 const { Sequelize, DataTypes } = require('sequelize');
 
-// Using SQLite for easy local setup. On Vercel, use /tmp/database.sqlite
-const defaultDbStorage = process.env.VERCEL
-    ? path.join('/tmp', 'database.sqlite')
-    : path.join(__dirname, 'database.sqlite');
+// Using SQLite for easy local and cloud setup.
+let dbStorage = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
+if (process.env.VERCEL) {
+    const tmpDb = path.join('/tmp', 'database.sqlite');
+    const bundledDb = path.join(__dirname, 'database.sqlite');
+    if (!fs.existsSync(tmpDb) && fs.existsSync(bundledDb)) {
+        try {
+            fs.copyFileSync(bundledDb, tmpDb);
+        } catch (e) {
+            console.error('Failed to copy bundled db to /tmp:', e);
+        }
+    }
+    dbStorage = tmpDb;
+}
 
 const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: process.env.DB_STORAGE || defaultDbStorage,
+    storage: dbStorage,
     logging: false
 });
 

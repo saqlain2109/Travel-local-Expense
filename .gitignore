@@ -9,9 +9,7 @@ client/dist/
 build/
 
 # Local SQLite databases & uploads
-*.sqlite
 *.sqlite-journal
-server/database.sqlite
 uploads/
 server/uploads/
 

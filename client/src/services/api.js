@@ -65,13 +65,17 @@ export const api = {
         return response.json();
     },
 
-    updateClaimStatus: async (id, status) => {
+    updateClaimStatus: async (id, status, extraData = {}) => {
+        const payload = typeof status === 'object' ? status : { status, ...extraData };
         const response = await fetch(`${API_URL}/claims/${id}/status`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify(payload),
         });
-        if (!response.ok) throw new Error('Failed to update claim');
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to update claim status');
+        }
         return response.json();
     },
 

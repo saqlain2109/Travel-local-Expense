@@ -50,10 +50,11 @@ const ClaimDetails = () => {
                 performedByName: user?.name || 'Approver',
                 performedByRole: user?.role === 'admin' ? 'Admin' : 'Manager'
             });
-            fetchClaim();
+            // Navigate back to the task list
+            navigate(-1);
         } catch (error) {
             console.error("Failed to update status", error);
-            alert("Failed to update status");
+            alert("Failed to update status: " + error.message);
         } finally {
             setActionLoading(false);
         }
