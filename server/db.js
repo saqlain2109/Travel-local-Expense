@@ -102,10 +102,28 @@ User.hasMany(Claim);
 Claim.belongsTo(User);
 ApprovalMatrix.belongsTo(User, { foreignKey: 'approverId', as: 'Approver' });
 Claim.hasMany(ClaimAuditLog, { as: 'AuditLogs', foreignKey: 'claimId', onDelete: 'CASCADE' });
-ClaimAuditLog.belongsTo(Claim, { foreignKey: 'claimId' });
+// Auto-migrate missing SQLite columns on existing tables
+const ensureColumnsExist = async () => {
+    try {
+        await sequelize.query('ALTER TABLE Users ADD COLUMN delegatedApproverId INTEGER;').catch(() => {});
+        await sequelize.query('ALTER TABLE Users ADD COLUMN delegatedUntil TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN advanceAmount REAL DEFAULT 0;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN settlementBalance REAL DEFAULT 0;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN utrNumber TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN paymentDate TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN paymentMethod TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN clarificationQuery TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN clarificationResponse TEXT;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN isPolicyViolation INTEGER DEFAULT 0;').catch(() => {});
+        await sequelize.query('ALTER TABLE Claims ADD COLUMN policyViolationReason TEXT;').catch(() => {});
+    } catch (e) {
+        // Silently continue
+    }
+};
 
 const seedDatabase = async () => {
     await sequelize.sync({ force: true });
+    await ensureColumnsExist();
 
     const admin = await User.create({
         name: 'Admin User',
@@ -180,4 +198,4 @@ const getDashboardStats = async (userId, role) => {
     };
 };
 
-module.exports = { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats };
+module.exports = { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats, ensureColumnsExist };

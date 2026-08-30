@@ -15,7 +15,7 @@ require('module').Module._initPaths();
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats } = require('./db');
+const { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats, ensureColumnsExist } = require('./db');
 const emailService = require('./emailService');
 
 const app = express();
@@ -53,6 +53,7 @@ app.get('/', (req, res) => {
 (async () => {
   try {
     await sequelize.sync();
+    await ensureColumnsExist();
 
     // Check if users exist, if not, seed with Admin
     const userCount = await User.count();
