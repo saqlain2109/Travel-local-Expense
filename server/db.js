@@ -73,34 +73,11 @@ const seedDatabase = async () => {
         email: 'admin@example.com',
         password: 'password',
         role: 'admin',
-        department: 'IT'
+        department: 'IT',
+        isActive: true
     });
 
-    const manager = await User.create({
-        name: 'Sarah Manager',
-        username: 'sarah',
-        email: 'sarah@example.com',
-        password: 'password',
-        role: 'user', // Managers are users with approval rights
-        department: 'Finance'
-    });
-
-    const employee = await User.create({
-        name: 'John Doe',
-        username: 'john',
-        email: 'user@example.com',
-        password: 'password',
-        role: 'user',
-        department: 'IT'
-    });
-
-    // Seed Matrix: IT claims go to Admin (for demo), Finance claims go to Sarah
-    await ApprovalMatrix.bulkCreate([
-        { department: 'IT', approverId: admin.id },
-        { department: 'Finance', approverId: manager.id }
-    ]);
-
-    console.log('Database seeded with fresh data!');
+    console.log('Database initialized with only Admin user!');
 };
 
 const getDashboardStats = async (userId, role) => {
