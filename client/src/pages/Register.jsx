@@ -6,6 +6,7 @@ import { gsap } from 'gsap';
 
 const Register = () => {
     const navigate = useNavigate();
+    const [departments, setDepartments] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -14,6 +15,10 @@ const Register = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        api.getDepartments().then(setDepartments).catch(() => {});
+    }, []);
 
     // Animation Refs
     const overlayRef = useRef(null);
@@ -147,16 +152,19 @@ const Register = () => {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                                 <div className="relative">
-                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                                    <select
                                         required
                                         name="department"
-                                        type="text"
                                         value={formData.department}
                                         onChange={handleChange}
-                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
-                                        placeholder="e.g. Sales"
-                                    />
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all appearance-none bg-white text-gray-800"
+                                    >
+                                        <option value="">Select Department</option>
+                                        {departments.map(d => (
+                                            <option key={d.id} value={d.name}>{d.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 

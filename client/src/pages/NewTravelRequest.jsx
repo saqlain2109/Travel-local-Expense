@@ -10,6 +10,7 @@ const NewTravelRequest = () => {
     const location = useLocation();
     const editClaim = location.state?.editClaim;
     const { user } = useAuth();
+    const [departments, setDepartments] = useState([]);
     const [formData, setFormData] = useState({
         title: '',
         destination: '',
@@ -28,6 +29,8 @@ const NewTravelRequest = () => {
     const textRef = useRef(null);
 
     React.useEffect(() => {
+        api.getDepartments().then(setDepartments).catch(() => {});
+
         if (user && !formData.department && user.department) {
             setFormData(prev => ({ ...prev, department: user.department }));
         }
@@ -191,17 +194,21 @@ const NewTravelRequest = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Department</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Department <span className="text-red-500">*</span></label>
                             <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <input
+                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                                <select
+                                    required
                                     name="department"
                                     value={formData.department}
                                     onChange={handleChange}
-                                    type="text"
-                                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg pl-10 pr-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
-                                    placeholder="e.g. Sales"
-                                />
+                                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg pl-10 pr-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all appearance-none"
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.name}>{d.name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 

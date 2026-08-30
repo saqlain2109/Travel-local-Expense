@@ -11,6 +11,7 @@ const NewExpenseClaim = () => {
     const editClaim = location.state?.editClaim;
     const { user } = useAuth();
     const [travelRequests, setTravelRequests] = useState([]);
+    const [departments, setDepartments] = useState([]);
     const [formData, setFormData] = useState({
         title: '',
         amount: '',
@@ -30,7 +31,7 @@ const NewExpenseClaim = () => {
     const textRef = useRef(null);
 
     React.useEffect(() => {
-        const fetchTravelRequests = async () => {
+        const fetchInitialData = async () => {
             if (user) {
                 setFormData(prev => ({
                     ...prev,
@@ -39,15 +40,19 @@ const NewExpenseClaim = () => {
                 }));
 
                 try {
-                    const allClaims = await api.getClaims(user.id);
-                    const approvedTravel = allClaims.filter(c => c.type === 'Travel' && c.status === 'Approved');
+                    const [allClaims, depts] = await Promise.all([
+                        api.getClaims(user.id),
+                        api.getDepartments().catch(() => [])
+                    ]);
+                    const approvedTravel = (allClaims || []).filter(c => c.type === 'Travel' && c.status === 'Approved');
                     setTravelRequests(approvedTravel);
+                    setDepartments(depts || []);
                 } catch (err) {
-                    console.error("Failed to fetch travel requests", err);
+                    console.error("Failed to fetch initial claim data", err);
                 }
             }
         };
-        fetchTravelRequests();
+        fetchInitialData();
 
         // If in edit mode, populate form
         if (editClaim) {
@@ -236,15 +241,19 @@ const NewExpenseClaim = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Department</label>
-                                <input
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Department <span className="text-red-500">*</span></label>
+                                <select
+                                    required
                                     name="department"
                                     value={formData.department}
                                     onChange={handleChange}
-                                    type="text"
-                                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
-                                    placeholder="e.g. Sales"
-                                />
+                                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all appearance-none"
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.name}>{d.name}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className="col-span-1 md:col-span-2">

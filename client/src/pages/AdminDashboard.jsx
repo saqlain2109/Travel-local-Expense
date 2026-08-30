@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
     Users, DollarSign, Clock, CheckCircle, BarChart,
     Briefcase, FileText, TrendingUp, AlertCircle, Download,
-    Printer, Filter, Search, MapPin
+    Printer, Filter, Search, MapPin, Tag, ArrowUpRight
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, Legend, BarChart as RechartsBarChart, Bar,
-    Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ComposedChart, Line
+    Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { gsap } from 'gsap';
 import * as XLSX from 'xlsx';
@@ -19,24 +19,32 @@ const AdminDashboard = () => {
     const { theme } = useTheme();
     const { user } = useAuth();
     const [claims, setClaims] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [departments, setDepartments] = useState([]);
     const [viewMode, setViewMode] = useState('overview'); // 'overview' | 'analytics' | 'reports'
     const [reportSearch, setReportSearch] = useState('');
     const [reportTypeFilter, setReportTypeFilter] = useState('All');
     const containerRef = useRef(null);
 
-    // Initial Fetch
+    // Initial Fetch of real claims, users, and departments
     useEffect(() => {
-        const fetchClaims = async () => {
+        const fetchDashboardData = async () => {
             try {
                 if (user) {
-                    const data = await api.getClaims(null, 'admin');
-                    setClaims(data);
+                    const [claimsData, usersData, deptsData] = await Promise.all([
+                        api.getClaims(null, 'admin'),
+                        api.getUsers(),
+                        api.getDepartments().catch(() => [])
+                    ]);
+                    setClaims(claimsData || []);
+                    setUsers(usersData || []);
+                    setDepartments(deptsData || []);
                 }
             } catch (error) {
-                console.error("Failed to fetch admin claims", error);
+                console.error("Failed to fetch admin dashboard data", error);
             }
         };
-        fetchClaims();
+        fetchDashboardData();
     }, [user]);
 
     // Animations
@@ -45,8 +53,8 @@ const AdminDashboard = () => {
             gsap.from(".dashboard-card", {
                 y: 20,
                 opacity: 0,
-                duration: 0.5,
-                stagger: 0.1,
+                duration: 0.4,
+                stagger: 0.08,
                 ease: "power2.out"
             });
         }, containerRef);
@@ -74,15 +82,16 @@ const AdminDashboard = () => {
         window.print();
     };
 
-    // Calculate Monthly Stats
-    const getMonthlyData = () => {
+    // 100% Dynamic Monthly Disbursement Calculation
+    const monthlyStats = useMemo(() => {
         const today = new Date();
-        const last6Months = [];
+        const months = [];
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            last6Months.push({
+            months.push({
                 name: d.toLocaleString('default', { month: 'short' }),
-                date: d,
+                year: d.getFullYear(),
+                monthIndex: d.getMonth(),
                 amount: 0
             });
         }
@@ -91,54 +100,89 @@ const AdminDashboard = () => {
             if (claim.status === 'Approved' && claim.date) {
                 const cDate = new Date(claim.date);
                 if (!isNaN(cDate.getTime())) {
-                    const match = last6Months.find(m =>
-                        m.date.getMonth() === cDate.getMonth() &&
-                        m.date.getFullYear() === cDate.getFullYear()
+                    const match = months.find(m =>
+                        m.monthIndex === cDate.getMonth() &&
+                        m.year === cDate.getFullYear()
                     );
                     if (match) {
-                        match.amount += claim.amount;
+                        match.amount += parseFloat(claim.amount || 0);
                     }
                 }
             }
         });
-        return last6Months;
-    };
 
-    const monthlyStats = getMonthlyData();
+        return months.map(({ name, amount }) => ({ name, amount: Math.round(amount) }));
+    }, [claims]);
 
-    const stats = {
-        totalEmployees: 24,
-        pending: claims.filter(c => c.status === 'Pending').length,
-        approvedCount: claims.filter(c => c.status === 'Approved').length,
-        totalDisbursed: claims.filter(c => c.status === 'Approved').reduce((acc, curr) => acc + curr.amount, 0),
-        rejectedCount: claims.filter(c => c.status === 'Rejected').length,
-    };
+    // 100% Dynamic Top Spenders / Department Spending Breakdown
+    const departmentSpending = useMemo(() => {
+        const deptMap = {};
+        claims.forEach(claim => {
+            if (claim.status === 'Approved' && claim.department) {
+                const dept = claim.department.trim();
+                deptMap[dept] = (deptMap[dept] || 0) + parseFloat(claim.amount || 0);
+            }
+        });
 
-    // Mock Data for Analytics View
-    const categoryData = [
-        { subject: 'Travel', A: 120, B: 110, fullMark: 150 },
-        { subject: 'Food', A: 98, B: 130, fullMark: 150 },
-        { subject: 'Supplies', A: 86, B: 130, fullMark: 150 },
-        { subject: 'Equipment', A: 99, B: 100, fullMark: 150 },
-        { subject: 'Training', A: 85, B: 90, fullMark: 150 },
-        { subject: 'Software', A: 65, B: 85, fullMark: 150 },
-    ];
+        const sorted = Object.keys(deptMap).map(name => ({
+            name,
+            amount: deptMap[name],
+            count: claims.filter(c => c.status === 'Approved' && c.department === name).length
+        })).sort((a, b) => b.amount - a.amount);
 
-    const budgetVsActual = [
-        { name: 'Jan', budget: 4000, actual: 2400 },
-        { name: 'Feb', budget: 3000, actual: 1398 },
-        { name: 'Mar', budget: 5000, actual: 9800 },
-        { name: 'Apr', budget: 2780, actual: 3908 },
-        { name: 'May', budget: 1890, actual: 4800 },
-        { name: 'Jun', budget: 2390, actual: 3800 },
-    ];
+        return sorted;
+    }, [claims]);
 
-    const topSpenders = [
-        { name: 'Marketing Dept', amount: 12500, trend: '+15%' },
-        { name: 'Sales Team', amount: 9800, trend: '+8%' },
-        { name: 'IT Infrastructure', amount: 8400, trend: '-2%' },
-        { name: 'HR & Admin', amount: 4500, trend: '+5%' },
-    ];
+    // 100% Dynamic Core Stats
+    const stats = useMemo(() => {
+        const approvedClaims = claims.filter(c => c.status === 'Approved');
+        const pendingClaims = claims.filter(c => c.status === 'Pending');
+        const rejectedClaims = claims.filter(c => c.status === 'Rejected');
+        const totalDisbursed = approvedClaims.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+        const activeUsersCount = users.filter(u => u.isActive !== false).length;
+
+        return {
+            totalEmployees: activeUsersCount,
+            pending: pendingClaims.length,
+            approvedCount: approvedClaims.length,
+            rejectedCount: rejectedClaims.length,
+            totalDisbursed: totalDisbursed
+        };
+    }, [claims, users]);
+
+    // 100% Dynamic Category Distribution for Analytics
+    const categoryData = useMemo(() => {
+        const catMap = {};
+        claims.forEach(c => {
+            if (c.status === 'Approved') {
+                const cat = c.category || c.type || 'General';
+                catMap[cat] = (catMap[cat] || 0) + parseFloat(c.amount || 0);
+            }
+        });
+
+        const data = Object.keys(catMap).map(subject => ({
+            subject,
+            amount: Math.round(catMap[subject])
+        }));
+
+        return data.length > 0 ? data : [
+            { subject: 'Travel', amount: 0 },
+            { subject: 'Food', amount: 0 },
+            { subject: 'Supplies', amount: 0 },
+            { subject: 'Hotel', amount: 0 }
+        ];
+    }, [claims]);
+
+    // 100% Dynamic Type Distribution (Travel vs Local Expense)
+    const typeDistribution = useMemo(() => {
+        const travel = claims.filter(c => c.type === 'Travel' && c.status === 'Approved').reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+        const expense = claims.filter(c => c.type === 'Expense' && c.status === 'Approved').reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+
+        return [
+            { name: 'Travel Claims', value: travel, color: '#f97316' },
+            { name: 'Local Expenses', value: expense, color: '#3b82f6' }
+        ];
+    }, [claims]);
 
     const filteredReportClaims = claims.filter(claim => {
         const matchesSearch =
@@ -204,9 +248,11 @@ const AdminDashboard = () => {
                                     <DollarSign className="w-4 h-4" />
                                 </div>
                             </div>
-                            <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">${stats.totalDisbursed.toLocaleString()}</h3>
-                            <p className="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-semibold flex items-center gap-1">
-                                <TrendingUp className="w-3 h-3" /> +12% vs last month
+                            <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
+                                ${stats.totalDisbursed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </h3>
+                            <p className="text-[10px] sm:text-xs text-gray-400 mt-1 font-semibold">
+                                From {stats.approvedCount} approved claims
                             </p>
                         </div>
 
@@ -229,7 +275,7 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
                             <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">{stats.totalEmployees}</h3>
-                            <p className="text-[10px] sm:text-xs text-gray-400 mt-1">Total registered</p>
+                            <p className="text-[10px] sm:text-xs text-gray-400 mt-1">Active users in database</p>
                         </div>
 
                         <div className="dashboard-card bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm border-b-4 border-b-green-500">
@@ -260,26 +306,38 @@ const AdminDashboard = () => {
                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                                         <XAxis dataKey="name" stroke="#9ca3af" />
                                         <YAxis stroke="#9ca3af" />
-                                        <Tooltip />
+                                        <Tooltip formatter={(val) => [`$${val.toLocaleString()}`, 'Disbursed']} />
                                         <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAmount)" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
-                        {/* Top Spenders Card */}
+                        {/* Real Dynamic Department Spending Card */}
                         <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
-                            <h3 className="font-bold text-base text-gray-900 dark:text-white">Department Spending</h3>
-                            <div className="space-y-3">
-                                {topSpenders.map((s, i) => (
-                                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                                        <div>
-                                            <span className="block font-bold text-sm text-gray-900 dark:text-white">{s.name}</span>
-                                            <span className="block text-xs text-gray-400">{s.trend} this quarter</span>
-                                        </div>
-                                        <span className="font-black text-sm text-gray-900 dark:text-white">${s.amount.toLocaleString()}</span>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-base text-gray-900 dark:text-white">Department Spending</h3>
+                                <span className="text-xs text-gray-400 font-semibold">{departmentSpending.length} Active</span>
+                            </div>
+                            <div className="space-y-3 max-h-72 overflow-y-auto no-scrollbar">
+                                {departmentSpending.length === 0 ? (
+                                    <div className="text-center py-10 text-gray-400 text-xs">
+                                        <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                        No approved department spending yet.
                                     </div>
-                                ))}
+                                ) : (
+                                    departmentSpending.map((s, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                            <div>
+                                                <span className="block font-bold text-sm text-gray-900 dark:text-white">{s.name}</span>
+                                                <span className="block text-xs text-gray-400">{s.count} approved claims</span>
+                                            </div>
+                                            <span className="font-black text-sm text-gray-900 dark:text-white">
+                                                ${s.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
@@ -290,34 +348,49 @@ const AdminDashboard = () => {
             {viewMode === 'analytics' && (
                 <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Dynamic Category Spending */}
                         <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4">Budget vs Actual Spend</h3>
+                            <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4">Category Spending ($)</h3>
                             <div className="h-64 sm:h-72 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <RechartsBarChart data={budgetVsActual}>
+                                    <RechartsBarChart data={categoryData}>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                                        <XAxis dataKey="name" stroke="#9ca3af" />
+                                        <XAxis dataKey="subject" stroke="#9ca3af" />
                                         <YAxis stroke="#9ca3af" />
-                                        <Tooltip />
-                                        <Legend />
-                                        <Bar dataKey="budget" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                                        <Bar dataKey="actual" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                                        <Tooltip formatter={(val) => [`$${val.toLocaleString()}`, 'Total Spent']} />
+                                        <Bar dataKey="amount" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                                     </RechartsBarChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
+                        {/* Travel vs Local Expense Distribution */}
                         <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4">Category Radar</h3>
-                            <div className="h-64 sm:h-72 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart outerRadius={90} data={categoryData}>
-                                        <PolarGrid stroke="#9ca3af" opacity={0.3} />
-                                        <PolarAngleAxis dataKey="subject" stroke="#9ca3af" />
-                                        <PolarRadiusAxis />
-                                        <Radar name="Spending" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
-                                    </RadarChart>
-                                </ResponsiveContainer>
+                            <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4">Claim Type Breakdown</h3>
+                            <div className="h-64 sm:h-72 w-full flex items-center justify-center">
+                                {typeDistribution.reduce((acc, t) => acc + t.value, 0) === 0 ? (
+                                    <p className="text-gray-400 text-xs">No approved claims to analyze yet.</p>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={typeDistribution}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={90}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {typeDistribution.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip formatter={(val) => [`$${val.toLocaleString()}`, 'Amount']} />
+                                            <Legend />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -398,19 +471,10 @@ const AdminDashboard = () => {
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
                                 {filteredReportClaims.map((claim) => (
                                     <tr key={claim.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
-                                        <td className="py-4 px-6 text-gray-400 font-mono">#{claim.id}</td>
-                                        <td className="py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                                            {claim.User?.name || 'Unknown User'}
-                                            <span className="block text-xs text-gray-400 font-normal">{claim.User?.email}</span>
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                                claim.type === 'Travel' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                            }`}>
-                                                {claim.type}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-gray-500 dark:text-gray-400">{claim.date}</td>
+                                        <td className="py-4 px-6 font-mono text-xs text-gray-500">#{claim.id}</td>
+                                        <td className="py-4 px-6 font-medium text-gray-900 dark:text-white">{claim.User?.name || 'Unknown'}</td>
+                                        <td className="py-4 px-6 text-gray-600 dark:text-gray-300">{claim.type}</td>
+                                        <td className="py-4 px-6 text-gray-600 dark:text-gray-300">{claim.date}</td>
                                         <td className="py-4 px-6 font-bold text-gray-900 dark:text-white">${parseFloat(claim.amount).toFixed(2)}</td>
                                         <td className="py-4 px-6">
                                             <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase ${

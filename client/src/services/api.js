@@ -166,6 +166,42 @@ export const api = {
         return response.json();
     },
 
+    // Department Master
+    getDepartments: async () => {
+        const response = await fetch(`${API_URL}/departments`);
+        if (!response.ok) throw new Error('Failed to fetch departments');
+        return response.json();
+    },
+    createDepartment: async (data) => {
+        const response = await fetch(`${API_URL}/departments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to create department');
+        }
+        return response.json();
+    },
+    updateDepartment: async (id, data) => {
+        const response = await fetch(`${API_URL}/departments/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to update department');
+        }
+        return response.json();
+    },
+    deleteDepartment: async (id) => {
+        const response = await fetch(`${API_URL}/departments/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete department');
+        return response.json();
+    },
+
     getDashboardStats: async (userId, role) => {
         const params = new URLSearchParams();
         if (userId) params.append('userId', userId);

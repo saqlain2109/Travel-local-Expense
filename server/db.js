@@ -35,6 +35,11 @@ const User = sequelize.define('User', {
     department: { type: DataTypes.STRING } // New: User's department
 });
 
+const Department = sequelize.define('Department', {
+    name: { type: DataTypes.STRING, allowNull: false, unique: true },
+    description: { type: DataTypes.STRING }
+});
+
 const ApprovalMatrix = sequelize.define('ApprovalMatrix', {
     department: { type: DataTypes.STRING, allowNull: false }, // Removed unique:true to allow multiple levels per dept
     approverId: { type: DataTypes.INTEGER, allowNull: false },
@@ -138,4 +143,4 @@ const getDashboardStats = async (userId, role) => {
     };
 };
 
-module.exports = { sequelize, User, Claim, ApprovalMatrix, seedDatabase, getDashboardStats };
+module.exports = { sequelize, User, Claim, ApprovalMatrix, Department, seedDatabase, getDashboardStats };

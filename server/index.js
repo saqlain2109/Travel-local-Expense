@@ -15,7 +15,7 @@ require('module').Module._initPaths();
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { sequelize, User, Claim, ApprovalMatrix, seedDatabase, getDashboardStats } = require('./db');
+const { sequelize, User, Claim, ApprovalMatrix, Department, seedDatabase, getDashboardStats } = require('./db');
 const emailService = require('./emailService');
 
 const app = express();
@@ -52,15 +52,27 @@ app.get('/', (req, res) => {
 // Initialize DB
 (async () => {
   try {
-    // Resetting database on every restart as requested by user
-    // await seedDatabase(); // DISABLED: To prevent data loss on restart
-    await sequelize.sync(); // Sync without alter to avoid SQLite backup errors
+    await sequelize.sync();
 
-    // Check if users exist, if not, seed
+    // Check if users exist, if not, seed with Admin
     const userCount = await User.count();
     if (userCount === 0) {
-      console.log('No users found. Seeding database...');
+      console.log('No users found. Creating Admin...');
       await seedDatabase();
+    }
+
+    // Seed default departments if table is empty
+    const deptCount = await Department.count();
+    if (deptCount === 0) {
+      console.log('Initializing standard department master...');
+      await Department.bulkCreate([
+        { name: 'IT', description: 'Information Technology & Systems' },
+        { name: 'Finance', description: 'Finance & Accounting' },
+        { name: 'HR', description: 'Human Resources' },
+        { name: 'Sales', description: 'Sales & Business Development' },
+        { name: 'Marketing', description: 'Marketing & Public Relations' },
+        { name: 'Operations', description: 'General Operations & Administration' }
+      ]);
     }
     console.log('Database synced');
   } catch (error) {
@@ -462,11 +474,63 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// --- Approval Matrix Routes ---
+// --- Department Master Routes ---
+app.get('/api/departments', async (req, res) => {
+  try {
+    const departments = await Department.findAll({ order: [['name', 'ASC']] });
+    res.json(departments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/departments', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: "Department name is required" });
+    const existing = await Department.findOne({ where: { name: name.trim() } });
+    if (existing) return res.status(400).json({ message: "Department already exists" });
+
+    const department = await Department.create({ name: name.trim(), description: description?.trim() || '' });
+    res.json({ success: true, department });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/departments/:id', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const department = await Department.findByPk(req.params.id);
+    if (!department) return res.status(404).json({ message: "Department not found" });
+
+    if (name && name.trim()) department.name = name.trim();
+    if (description !== undefined) department.description = description.trim();
+    await department.save();
+    res.json({ success: true, department });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/departments/:id', async (req, res) => {
+  try {
+    const department = await Department.findByPk(req.params.id);
+    if (!department) return res.status(404).json({ message: "Department not found" });
+
+    await department.destroy();
+    res.json({ success: true, message: "Department deleted" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Approval Matrix Routes (Supports Dynamic / Multi-level 1 to N) ---
 app.get('/api/matrix', async (req, res) => {
   try {
     const matrix = await ApprovalMatrix.findAll({
-      include: [{ model: User, as: 'Approver', attributes: ['id', 'name'] }]
+      include: [{ model: User, as: 'Approver', attributes: ['id', 'name', 'role', 'department', 'email'] }],
+      order: [['department', 'ASC'], ['level', 'ASC']]
     });
     res.json(matrix);
   } catch (error) {
@@ -477,7 +541,7 @@ app.get('/api/matrix', async (req, res) => {
 app.post('/api/matrix', async (req, res) => {
   try {
     const { department, approverId, level } = req.body;
-    const lvl = level || 1;
+    const lvl = parseInt(level, 10) || 1;
 
     // Find if entry exists for this dept & level
     const existing = await ApprovalMatrix.findOne({ where: { department, level: lvl } });
@@ -485,17 +549,23 @@ app.post('/api/matrix', async (req, res) => {
     if (existing) {
       existing.approverId = approverId;
       await existing.save();
-      return res.json({ success: true, entry: existing });
+      const updated = await ApprovalMatrix.findByPk(existing.id, {
+        include: [{ model: User, as: 'Approver', attributes: ['id', 'name', 'role', 'department', 'email'] }]
+      });
+      return res.json({ success: true, entry: updated });
     }
 
     const entry = await ApprovalMatrix.create({ department, approverId, level: lvl });
-    res.json({ success: true, entry });
+    const created = await ApprovalMatrix.findByPk(entry.id, {
+      include: [{ model: User, as: 'Approver', attributes: ['id', 'name', 'role', 'department', 'email'] }]
+    });
+    res.json({ success: true, entry: created });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/matrix/:id', async (req, res) => { // In case we want to delete a matrix rule
+app.delete('/api/matrix/:id', async (req, res) => {
   try {
     const entry = await ApprovalMatrix.findByPk(req.params.id);
     if (entry) {
