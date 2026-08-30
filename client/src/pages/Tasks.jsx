@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Search, CheckCircle, XCircle, FileText, ChevronRight, User, DollarSign, Calendar, MapPin, Check, X, MessageSquare } from 'lucide-react';
+import { Search, CheckCircle, XCircle, FileText, ChevronRight, User, DollarSign, Calendar, MapPin, Check, X, MessageSquare, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Tasks = () => {
@@ -59,20 +59,43 @@ const Tasks = () => {
             });
     }, [claims, filterStatus, searchQuery]);
 
+    // Instant 1-click Approval/Rejection with Optimistic UI update
     const handleStatusUpdate = async (id, newStatus) => {
+        if (actionLoading) return;
         setActionLoading(id + '_' + newStatus);
+
+        // 1. Optimistically update local state immediately (0ms delay)
+        // This instantly removes the card from 'Pending' tab and increments 'Approved'/'Rejected'
+        const previousClaims = [...claims];
+        setClaims(prevClaims =>
+            prevClaims.map(c => c.id === id ? { ...c, status: newStatus } : c)
+        );
+
         try {
-            await api.updateClaimStatus(id, newStatus);
-            await fetchData();
+            const res = await api.updateClaimStatus(id, newStatus);
+            // If moved to next level, background sync
+            if (res && res.message && res.message.includes('next approval level')) {
+                // Background refresh to reflect new level approver
+                await fetchData();
+            }
         } catch (error) {
             console.error("Failed to update status", error);
+            // Revert back on failure
+            setClaims(previousClaims);
+            alert("Failed to update status. Please try again.");
         } finally {
             setActionLoading(null);
         }
     };
 
+    // Instant 1-click User Activation with Optimistic UI update
     const handleUserApproval = async (id, approve) => {
         if (!window.confirm(approve ? "Activate this user account?" : "Reject and delete this user registration?")) return;
+
+        // Optimistically remove user card immediately
+        const previousPending = [...pendingUsers];
+        setPendingUsers(prev => prev.filter(u => u.id !== id));
+
         try {
             if (approve) {
                 await api.updateUser(id, { isActive: true });
@@ -82,6 +105,8 @@ const Tasks = () => {
             await fetchData();
         } catch (error) {
             console.error("Failed to update user", error);
+            setPendingUsers(previousPending);
+            alert("Failed to process user activation");
         }
     };
 
@@ -154,19 +179,22 @@ const Tasks = () => {
 
             {/* Filter Tabs (Horizontal touch scrolling on mobile) */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                {['Pending', 'Approved', 'Rejected', 'All'].map(status => (
-                    <button
-                        key={status}
-                        onClick={() => setFilterStatus(status)}
-                        className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap active:scale-95 ${
-                            filterStatus === status
-                                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                        {status} ({claims.filter(c => status === 'All' ? true : c.status === status).length})
-                    </button>
-                ))}
+                {['Pending', 'Approved', 'Rejected', 'All'].map(status => {
+                    const count = claims.filter(c => status === 'All' ? true : c.status === status).length;
+                    return (
+                        <button
+                            key={status}
+                            onClick={() => setFilterStatus(status)}
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap active:scale-95 ${
+                                filterStatus === status
+                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                            }`}
+                        >
+                            {status} ({count})
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Claims Queue */}
@@ -229,18 +257,36 @@ const Tasks = () => {
                                     {claim.status === 'Pending' && (
                                         <>
                                             <button
-                                                onClick={() => handleStatusUpdate(claim.id, 'Approved')}
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleStatusUpdate(claim.id, 'Approved');
+                                                }}
                                                 disabled={actionLoading === claim.id + '_Approved'}
-                                                className="px-3.5 py-2 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-green-600/20 transition-all flex items-center gap-1.5"
+                                                className="px-3.5 py-2 bg-green-600 hover:bg-green-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-green-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
                                             >
-                                                <Check className="w-4 h-4" /> Approve
+                                                {actionLoading === claim.id + '_Approved' ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Check className="w-4 h-4" />
+                                                )}
+                                                <span>Approve</span>
                                             </button>
                                             <button
-                                                onClick={() => handleStatusUpdate(claim.id, 'Rejected')}
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleStatusUpdate(claim.id, 'Rejected');
+                                                }}
                                                 disabled={actionLoading === claim.id + '_Rejected'}
-                                                className="px-3 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-600 dark:text-red-300 active:scale-95 text-xs font-bold rounded-xl transition-all flex items-center gap-1"
+                                                className="px-3 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-600 dark:text-red-300 active:scale-95 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
                                             >
-                                                <X className="w-4 h-4" /> Reject
+                                                {actionLoading === claim.id + '_Rejected' ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <X className="w-4 h-4" />
+                                                )}
+                                                <span>Reject</span>
                                             </button>
                                         </>
                                     )}
