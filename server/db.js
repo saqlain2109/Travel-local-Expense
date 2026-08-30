@@ -32,7 +32,9 @@ const User = sequelize.define('User', {
     password: { type: DataTypes.STRING, allowNull: false }, // In real app, hash this!
     role: { type: DataTypes.ENUM('user', 'admin'), defaultValue: 'user' },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
-    department: { type: DataTypes.STRING } // New: User's department
+    department: { type: DataTypes.STRING }, // User's department
+    delegatedApproverId: { type: DataTypes.INTEGER }, // Out-of-office delegate
+    delegatedUntil: { type: DataTypes.STRING } // Date until delegation is active
 });
 
 const Department = sequelize.define('Department', {
@@ -40,8 +42,16 @@ const Department = sequelize.define('Department', {
     description: { type: DataTypes.STRING }
 });
 
+const ExpenseCategory = sequelize.define('ExpenseCategory', {
+    name: { type: DataTypes.STRING, allowNull: false, unique: true },
+    icon: { type: DataTypes.STRING, defaultValue: 'Tag' },
+    maxLimit: { type: DataTypes.FLOAT, defaultValue: 500 }, // Max allowable per claim before warning
+    description: { type: DataTypes.STRING },
+    isReceiptRequired: { type: DataTypes.BOOLEAN, defaultValue: true }
+});
+
 const ApprovalMatrix = sequelize.define('ApprovalMatrix', {
-    department: { type: DataTypes.STRING, allowNull: false }, // Removed unique:true to allow multiple levels per dept
+    department: { type: DataTypes.STRING, allowNull: false },
     approverId: { type: DataTypes.INTEGER, allowNull: false },
     level: { type: DataTypes.INTEGER, defaultValue: 1 } // Level 1 is first approver
 });
@@ -51,23 +61,48 @@ const Claim = sequelize.define('Claim', {
     type: { type: DataTypes.STRING, allowNull: false }, // 'Travel' or 'Expense'
     amount: { type: DataTypes.FLOAT, allowNull: false },
     date: { type: DataTypes.STRING, allowNull: false },
-    status: { type: DataTypes.ENUM('Pending', 'Approved', 'Rejected'), defaultValue: 'Pending' },
+    status: { type: DataTypes.STRING, defaultValue: 'Pending' }, // 'Pending', 'Approved', 'Rejected', 'Disbursed', 'Clarification'
     description: { type: DataTypes.TEXT },
     // Specific fields
-    category: { type: DataTypes.STRING }, // For Expense (Food, Office, etc.)
+    category: { type: DataTypes.STRING }, // For Expense (Food, Travel, etc.)
     destination: { type: DataTypes.STRING }, // For Travel
     startDate: { type: DataTypes.STRING }, // For Travel
     endDate: { type: DataTypes.STRING }, // For Travel
     receiptUrl: { type: DataTypes.STRING }, // For Expense
     relatedClaimId: { type: DataTypes.INTEGER }, // To link Expense to a Travel Request
-    department: { type: DataTypes.STRING }, // New: Department charged for this claim
-    approverId: { type: DataTypes.INTEGER } // New: The user who needs to approve this
+    department: { type: DataTypes.STRING }, // Department charged for this claim
+    approverId: { type: DataTypes.INTEGER }, // Current active approver
+    
+    // Enterprise Extensions
+    advanceAmount: { type: DataTypes.FLOAT, defaultValue: 0 }, // Travel Advance taken
+    settlementBalance: { type: DataTypes.FLOAT, defaultValue: 0 }, // Net refund or payment balance
+    utrNumber: { type: DataTypes.STRING }, // Bank UTR / Transaction Ref ID
+    paymentDate: { type: DataTypes.STRING }, // When finance disbursed
+    paymentMethod: { type: DataTypes.STRING }, // Bank Transfer, UPI, Corporate Card, Cash
+    clarificationQuery: { type: DataTypes.TEXT }, // Query asked by approver
+    clarificationResponse: { type: DataTypes.TEXT }, // Response by employee
+    isPolicyViolation: { type: DataTypes.BOOLEAN, defaultValue: false },
+    policyViolationReason: { type: DataTypes.STRING }
+});
+
+const ClaimAuditLog = sequelize.define('ClaimAuditLog', {
+    claimId: { type: DataTypes.INTEGER, allowNull: false },
+    action: { type: DataTypes.STRING, allowNull: false }, // 'Submitted', 'Level 1 Approved', 'Clarification Requested', 'Disbursed', 'Rejected'
+    performedByName: { type: DataTypes.STRING, allowNull: false },
+    performedByRole: { type: DataTypes.STRING, defaultValue: 'User' },
+    comments: { type: DataTypes.TEXT },
+    utrNumber: { type: DataTypes.STRING },
+    paymentMethod: { type: DataTypes.STRING },
+    paymentDate: { type: DataTypes.STRING },
+    timestamp: { type: DataTypes.STRING, defaultValue: () => new Date().toISOString() }
 });
 
 // Relations
 User.hasMany(Claim);
 Claim.belongsTo(User);
 ApprovalMatrix.belongsTo(User, { foreignKey: 'approverId', as: 'Approver' });
+Claim.hasMany(ClaimAuditLog, { as: 'AuditLogs', foreignKey: 'claimId', onDelete: 'CASCADE' });
+ClaimAuditLog.belongsTo(Claim, { foreignKey: 'claimId' });
 
 const seedDatabase = async () => {
     await sequelize.sync({ force: true });
@@ -95,13 +130,15 @@ const getDashboardStats = async (userId, role) => {
     const claims = await Claim.findAll({ where: whereClause });
     const totalRequests = claims.length;
     const totalAmount = claims
-        .filter(c => c.status === 'Approved')
-        .reduce((sum, c) => sum + c.amount, 0);
+        .filter(c => c.status === 'Approved' || c.status === 'Disbursed')
+        .reduce((sum, c) => sum + (c.amount || 0), 0);
 
     // 2. Status Counts
     const statusCounts = {
         Pending: claims.filter(c => c.status === 'Pending').length,
         Approved: claims.filter(c => c.status === 'Approved').length,
+        Disbursed: claims.filter(c => c.status === 'Disbursed').length,
+        Clarification: claims.filter(c => c.status === 'Clarification').length,
         Rejected: claims.filter(c => c.status === 'Rejected').length
     };
 
@@ -117,7 +154,7 @@ const getDashboardStats = async (userId, role) => {
         const monthlyAmount = claims
             .filter(c => {
                 const cDate = new Date(c.date);
-                return c.status === 'Approved' &&
+                return (c.status === 'Approved' || c.status === 'Disbursed') &&
                     cDate.getMonth() === monthIdx &&
                     cDate.getFullYear() === year;
             })
@@ -143,4 +180,4 @@ const getDashboardStats = async (userId, role) => {
     };
 };
 
-module.exports = { sequelize, User, Claim, ApprovalMatrix, Department, seedDatabase, getDashboardStats };
+module.exports = { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats };

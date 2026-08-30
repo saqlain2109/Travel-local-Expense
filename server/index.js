@@ -15,7 +15,7 @@ require('module').Module._initPaths();
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { sequelize, User, Claim, ApprovalMatrix, Department, seedDatabase, getDashboardStats } = require('./db');
+const { sequelize, User, Claim, ApprovalMatrix, Department, ExpenseCategory, ClaimAuditLog, seedDatabase, getDashboardStats } = require('./db');
 const emailService = require('./emailService');
 
 const app = express();
@@ -74,6 +74,22 @@ app.get('/', (req, res) => {
         { name: 'Operations', description: 'General Operations & Administration' }
       ]);
     }
+
+    // Seed default expense categories if table is empty
+    const catCount = await ExpenseCategory.count();
+    if (catCount === 0) {
+      console.log('Initializing standard expense categories master...');
+      await ExpenseCategory.bulkCreate([
+        { name: 'Food & Meals', icon: 'Utensils', maxLimit: 50, description: 'Daily meals, team lunch and breakfast' },
+        { name: 'Travel (Local)', icon: 'Car', maxLimit: 100, description: 'Taxi, Cab, Metro, Bus, Auto travel' },
+        { name: 'Hotel & Accommodation', icon: 'Building', maxLimit: 250, description: 'Hotel stays for official trips' },
+        { name: 'Office Supplies', icon: 'Package', maxLimit: 150, description: 'Stationery, printing, postage' },
+        { name: 'Client Entertainment', icon: 'Coffee', maxLimit: 200, description: 'Client meetings, dinners and hospitality' },
+        { name: 'Fuel & Mileage', icon: 'Fuel', maxLimit: 75, description: 'Fuel reimbursement for personal vehicle' },
+        { name: 'Software & Tools', icon: 'Laptop', maxLimit: 300, description: 'Subscriptions, software & digital tools' }
+      ]);
+    }
+
     console.log('Database synced');
   } catch (error) {
     console.error('DB Init Error:', error);
@@ -154,31 +170,33 @@ app.get('/api/claims', async (req, res) => {
     let whereClause = {};
 
     if (role === 'admin') {
-      // Admin sees all? Or just what they approve + all? 
-      // User requirement: Every user should have task page. 
-      // AdminDashboard still needs ALL for stats. 
-      // Tasks page needs "claims assigned to me".
-      // Let's assume Admin Dashboard fetches ALL, and Tasks fetches "assigned to me".
-      // We might need a separate 'mode' param or just return everything for admin role for now, 
-      // and let frontend filter.
-      // BUT, if we want to support non-admin approvers, we need to handle that.
-
-      // If fetching for "Tasks" page specifically, we might want to filter by approverId.
-      // For now, let's keep 'admin' returning ALL for the Dashboard.
       whereClause = {};
     } else if (userId) {
-      // Regular user: See their own claims AND claims they need to approve
+      // Check if any manager delegated their approval to this user
+      const todayStr = new Date().toISOString().split('T')[0];
+      const delegatingUsers = await User.findAll({
+        where: { delegatedApproverId: userId }
+      });
+      const validDelegatorIds = delegatingUsers
+        .filter(u => !u.delegatedUntil || u.delegatedUntil >= todayStr)
+        .map(u => u.id);
+
+      const allApproverIds = [parseInt(userId, 10), ...validDelegatorIds];
+
       whereClause = {
         [require('sequelize').Op.or]: [
           { UserId: userId },
-          { approverId: userId }
+          { approverId: allApproverIds }
         ]
       };
     }
 
     const claims = await Claim.findAll({
       where: whereClause,
-      include: [User],
+      include: [
+        { model: User },
+        { model: ClaimAuditLog, as: 'AuditLogs' }
+      ],
       order: [['createdAt', 'DESC']]
     });
     res.json(claims);
@@ -206,24 +224,15 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const user = await User.findOne({ where: { username } });
 
     if (!user) {
-      // Security: Don't reveal if user exists or not, just fake success
-      // But for this internal tool, maybe helpful to know?
-      // User requested: "proper user... automatically dekhega"
-      // Let's return success message regardless to be safe, but log it.
       console.log(`Password reset requested for non-existent user: ${username}`);
       return res.json({ success: true, message: 'If this account exists, a new password has been sent to your registered email.' });
     }
 
-    // Generate new password
     const newPassword = Math.random().toString(36).slice(-8);
-
-    // Update user
     user.password = newPassword;
     await user.save();
 
-    // Send Email
     await emailService.sendPasswordResetEmail(user, newPassword).catch(console.error);
-
     res.json({ success: true, message: 'If this account exists, a new password has been sent to your registered email.' });
   } catch (error) {
     console.error("Forgot Password Error:", error);
@@ -231,14 +240,21 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
-// --- Claim Routes ---
-// ... (GET /api/claims remains the same)
-
+// --- Claim Creation with Audit Log & Duplicate Check ---
 app.post('/api/claims', async (req, res) => {
   try {
     const { userId, department, ...claimData } = req.body;
 
-    // Find approver for this department (Level 1)
+    // Check potential duplicate
+    const duplicate = await Claim.findOne({
+      where: {
+        UserId: userId,
+        amount: claimData.amount,
+        date: claimData.date,
+        title: claimData.title
+      }
+    });
+
     let approverId = null;
     let status = 'Pending';
 
@@ -260,25 +276,28 @@ app.post('/api/claims', async (req, res) => {
       UserId: userId,
       department,
       approverId,
-      status // Set status based on logic
+      status
+    });
+
+    // Create Initial Audit Log
+    const requester = await User.findByPk(userId);
+    await ClaimAuditLog.create({
+      claimId: claim.id,
+      action: status === 'Approved' ? 'Auto-Approved (No Matrix Configured)' : 'Claim Submitted',
+      performedByName: requester ? requester.name : 'Employee',
+      performedByRole: requester ? requester.role : 'user',
+      comments: claimData.description || (duplicate ? '⚠️ Note: Potential duplicate submission detected' : 'Submitted for department approval')
     });
 
     // --- Email Notifications ---
-    const requester = await User.findByPk(userId);
-
     if (status === 'Approved') {
-      // Notify Requester of Auto-Approval
       if (requester && requester.email) {
         await emailService.sendAutoApprovalEmail(requester, claim).catch(err => console.error("Email fail:", err));
       }
     } else {
-      // Standard Flow
-      // 1. Notify Requester
       if (requester && requester.email) {
         await emailService.sendClaimSubmissionEmail(requester, claim).catch(err => console.error("Email fail:", err));
       }
-
-      // 2. Notify Approver
       if (approverId) {
         const approver = await User.findByPk(approverId);
         if (approver && approver.email) {
@@ -288,16 +307,21 @@ app.post('/api/claims', async (req, res) => {
       }
     }
 
-    res.json({ success: true, claim });
+    res.json({ success: true, claim, duplicateWarning: !!duplicate });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get Single Claim
+// Get Single Claim with Audit Logs & Flow
 app.get('/api/claims/:id', async (req, res) => {
   try {
-    const claim = await Claim.findByPk(req.params.id, { include: User });
+    const claim = await Claim.findByPk(req.params.id, {
+      include: [
+        { model: User, attributes: ['id', 'name', 'email', 'department', 'role'] },
+        { model: ClaimAuditLog, as: 'AuditLogs' }
+      ]
+    });
     if (!claim) return res.status(404).json({ message: "Claim not found" });
 
     // Fetch approval flow for this department
@@ -316,71 +340,172 @@ app.get('/api/claims/:id', async (req, res) => {
   }
 });
 
+// Status Update with Multi-Level Progression and Audit Logging
 app.put('/api/claims/:id/status', async (req, res) => {
-  const { status } = req.body;
+  const { status, comments, performedByName, performedByRole } = req.body;
   try {
     const claim = await Claim.findByPk(req.params.id);
-    if (claim) {
-      if (status === 'Approved') {
-        // Check if there is a next level approver
-        const currentApprover = await ApprovalMatrix.findOne({
-          where: { department: claim.department, approverId: claim.approverId }
+    if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
+
+    if (status === 'Approved') {
+      // Check if there is a next level approver
+      const currentApprover = await ApprovalMatrix.findOne({
+        where: { department: claim.department, approverId: claim.approverId }
+      });
+
+      if (currentApprover) {
+        const nextLevel = currentApprover.level + 1;
+        const nextApprover = await ApprovalMatrix.findOne({
+          where: { department: claim.department, level: nextLevel }
         });
 
-        if (currentApprover) {
-          const nextLevel = currentApprover.level + 1;
-          const nextApprover = await ApprovalMatrix.findOne({
-            where: { department: claim.department, level: nextLevel }
+        if (nextApprover) {
+          // Log Level Step Approval
+          await ClaimAuditLog.create({
+            claimId: claim.id,
+            action: `Level ${currentApprover.level} Approved`,
+            performedByName: performedByName || 'Approver',
+            performedByRole: performedByRole || 'Manager',
+            comments: comments || `Approved at Level ${currentApprover.level}. Escalated to Level ${nextLevel}.`
           });
 
-          if (nextApprover) {
-            // Move to next level
-            claim.approverId = nextApprover.approverId;
-            // Status remains Pending
-            await claim.save();
+          // Move to next level
+          claim.approverId = nextApprover.approverId;
+          await claim.save();
 
-            // Notify New Approver
-            const newApprover = await User.findByPk(nextApprover.approverId);
-            const requester = await User.findByPk(claim.UserId);
-            if (newApprover && newApprover.email) {
-              await emailService.sendApprovalRequestEmail(newApprover, claim, requester ? requester.name : "Employee")
-                .catch(e => console.error("Email fail:", e));
-            }
-
-            return res.json({ success: true, message: 'Moved to next approval level', claim });
+          // Notify New Approver
+          const newApprover = await User.findByPk(nextApprover.approverId);
+          const requester = await User.findByPk(claim.UserId);
+          if (newApprover && newApprover.email) {
+            await emailService.sendApprovalRequestEmail(newApprover, claim, requester ? requester.name : "Employee")
+              .catch(e => console.error("Email fail:", e));
           }
+
+          return res.json({ success: true, message: `Moved to Level ${nextLevel} approval`, claim });
         }
       }
-
-      // Final approval or Rejection
-      claim.status = status;
-      await claim.save();
-
-      // Notify Requester of Final Status
-      const requester = await User.findByPk(claim.UserId);
-      if (requester && requester.email) {
-        await emailService.sendClaimStatusUpdateEmail(requester, claim, status)
-          .catch(e => console.error("Email fail:", e));
-      }
-
-      res.json({ success: true, claim });
-    } else {
-      res.status(404).json({ success: false, message: 'Claim not found' });
     }
+
+    // Final Approval or Rejection
+    claim.status = status;
+    await claim.save();
+
+    // Log Final Decision
+    await ClaimAuditLog.create({
+      claimId: claim.id,
+      action: status === 'Approved' ? 'Final Claim Approved' : 'Claim Rejected',
+      performedByName: performedByName || 'Approver',
+      performedByRole: performedByRole || 'Manager',
+      comments: comments || (status === 'Approved' ? 'All approval levels completed. Ready for payout.' : 'Claim has been rejected.')
+    });
+
+    // Notify Requester
+    const requester = await User.findByPk(claim.UserId);
+    if (requester && requester.email) {
+      await emailService.sendClaimStatusUpdateEmail(requester, claim, status)
+        .catch(e => console.error("Email fail:", e));
+    }
+
+    res.json({ success: true, claim });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Request Clarification (Approver queries employee)
+app.post('/api/claims/:id/clarify', async (req, res) => {
+  try {
+    const { query, performedByName, performedByRole } = req.body;
+    if (!query) return res.status(400).json({ message: "Query message is required" });
+
+    const claim = await Claim.findByPk(req.params.id);
+    if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+    claim.status = 'Clarification';
+    claim.clarificationQuery = query;
+    await claim.save();
+
+    await ClaimAuditLog.create({
+      claimId: claim.id,
+      action: 'Clarification Requested',
+      performedByName: performedByName || 'Approver',
+      performedByRole: performedByRole || 'Manager',
+      comments: query
+    });
+
+    res.json({ success: true, message: "Clarification requested", claim });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Respond to Clarification (Employee replies)
+app.post('/api/claims/:id/respond-clarification', async (req, res) => {
+  try {
+    const { response, performedByName } = req.body;
+    if (!response) return res.status(400).json({ message: "Response message is required" });
+
+    const claim = await Claim.findByPk(req.params.id);
+    if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+    claim.status = 'Pending';
+    claim.clarificationResponse = response;
+    await claim.save();
+
+    await ClaimAuditLog.create({
+      claimId: claim.id,
+      action: 'Clarification Provided',
+      performedByName: performedByName || 'Employee',
+      performedByRole: 'user',
+      comments: response
+    });
+
+    res.json({ success: true, message: "Response submitted. Claim returned to pending approval.", claim });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Finance Disbursement & Payout Tracking
+app.post('/api/claims/:id/disburse', async (req, res) => {
+  try {
+    const { utrNumber, paymentDate, paymentMethod, performedByName, comments } = req.body;
+    if (!utrNumber) return res.status(400).json({ message: "UTR / Transaction Reference Number is required" });
+
+    const claim = await Claim.findByPk(req.params.id);
+    if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+    claim.status = 'Disbursed';
+    claim.utrNumber = utrNumber;
+    claim.paymentDate = paymentDate || new Date().toISOString().split('T')[0];
+    claim.paymentMethod = paymentMethod || 'Bank Transfer';
+    await claim.save();
+
+    await ClaimAuditLog.create({
+      claimId: claim.id,
+      action: 'Payment Disbursed / Paid',
+      performedByName: performedByName || 'Finance Officer',
+      performedByRole: 'Finance',
+      comments: comments || `Payment disbursed via ${claim.paymentMethod}. Transaction Ref/UTR: ${utrNumber}`,
+      utrNumber: utrNumber,
+      paymentMethod: claim.paymentMethod,
+      paymentDate: claim.paymentDate
+    });
+
+    res.json({ success: true, message: "Claim marked as Disbursed / Paid", claim });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 // Update Claim Details
 app.put('/api/claims/:id', async (req, res) => {
   try {
-    const { title, description, amount, date, type, category, startDate, endDate, receiptUrl } = req.body;
+    const { title, description, amount, date, type, category, startDate, endDate, receiptUrl, advanceAmount } = req.body;
     const claim = await Claim.findByPk(req.params.id);
 
     if (!claim) return res.status(404).json({ message: "Claim not found" });
 
-    // Update fields
     if (title) claim.title = title;
     if (description) claim.description = description;
     if (amount) claim.amount = amount;
@@ -390,12 +515,10 @@ app.put('/api/claims/:id', async (req, res) => {
     if (startDate) claim.startDate = startDate;
     if (endDate) claim.endDate = endDate;
     if (receiptUrl) claim.receiptUrl = receiptUrl;
-
-    // Optional: Reset status to Pending if it was Rejected? 
-    // for now, let's keep status as is unless explicitly changed, 
-    // but usually editing a rejected claim implies re-submission.
-    // Let's NOT auto-change status here to keep it simple, 
-    // or arguably, if it's "Edit", it might be fixing a mistake on a Pending claim.
+    if (advanceAmount !== undefined) {
+      claim.advanceAmount = advanceAmount;
+      claim.settlementBalance = (parseFloat(amount || claim.amount || 0) - parseFloat(advanceAmount || 0));
+    }
 
     await claim.save();
     res.json({ success: true, claim });
@@ -471,6 +594,85 @@ app.delete('/api/users/:id', async (req, res) => {
     res.json({ message: "User deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Out-of-Office Approver Delegation
+app.put('/api/users/:id/delegate', async (req, res) => {
+  try {
+    const { delegatedApproverId, delegatedUntil } = req.body;
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.delegatedApproverId = delegatedApproverId || null;
+    user.delegatedUntil = delegatedUntil || null;
+    await user.save();
+
+    res.json({ success: true, message: "Approval delegation updated", user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Expense Category Master Routes ---
+app.get('/api/categories', async (req, res) => {
+  try {
+    const categories = await ExpenseCategory.findAll({ order: [['name', 'ASC']] });
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/categories', async (req, res) => {
+  try {
+    const { name, icon, maxLimit, description, isReceiptRequired } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: "Category name is required" });
+
+    const existing = await ExpenseCategory.findOne({ where: { name: name.trim() } });
+    if (existing) return res.status(400).json({ message: "Category already exists" });
+
+    const category = await ExpenseCategory.create({
+      name: name.trim(),
+      icon: icon || 'Tag',
+      maxLimit: maxLimit !== undefined ? parseFloat(maxLimit) : 500,
+      description: description?.trim() || '',
+      isReceiptRequired: isReceiptRequired !== undefined ? isReceiptRequired : true
+    });
+    res.json({ success: true, category });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/categories/:id', async (req, res) => {
+  try {
+    const { name, icon, maxLimit, description, isReceiptRequired } = req.body;
+    const category = await ExpenseCategory.findByPk(req.params.id);
+    if (!category) return res.status(404).json({ message: "Category not found" });
+
+    if (name && name.trim()) category.name = name.trim();
+    if (icon) category.icon = icon;
+    if (maxLimit !== undefined) category.maxLimit = parseFloat(maxLimit);
+    if (description !== undefined) category.description = description.trim();
+    if (isReceiptRequired !== undefined) category.isReceiptRequired = isReceiptRequired;
+
+    await category.save();
+    res.json({ success: true, category });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/categories/:id', async (req, res) => {
+  try {
+    const category = await ExpenseCategory.findByPk(req.params.id);
+    if (!category) return res.status(404).json({ message: "Category not found" });
+
+    await category.destroy();
+    res.json({ success: true, message: "Category deleted" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

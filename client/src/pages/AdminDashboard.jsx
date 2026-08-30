@@ -135,7 +135,7 @@ const AdminDashboard = () => {
 
     // 100% Dynamic Core Stats
     const stats = useMemo(() => {
-        const approvedClaims = claims.filter(c => c.status === 'Approved');
+        const approvedClaims = claims.filter(c => c.status === 'Approved' || c.status === 'Disbursed');
         const pendingClaims = claims.filter(c => c.status === 'Pending');
         const rejectedClaims = claims.filter(c => c.status === 'Rejected');
         const totalDisbursed = approvedClaims.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
@@ -154,7 +154,7 @@ const AdminDashboard = () => {
     const categoryData = useMemo(() => {
         const catMap = {};
         claims.forEach(c => {
-            if (c.status === 'Approved') {
+            if (c.status === 'Approved' || c.status === 'Disbursed') {
                 const cat = c.category || c.type || 'General';
                 catMap[cat] = (catMap[cat] || 0) + parseFloat(c.amount || 0);
             }
@@ -175,8 +175,8 @@ const AdminDashboard = () => {
 
     // 100% Dynamic Type Distribution (Travel vs Local Expense)
     const typeDistribution = useMemo(() => {
-        const travel = claims.filter(c => c.type === 'Travel' && c.status === 'Approved').reduce((s, c) => s + parseFloat(c.amount || 0), 0);
-        const expense = claims.filter(c => c.type === 'Expense' && c.status === 'Approved').reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+        const travel = claims.filter(c => c.type === 'Travel' && (c.status === 'Approved' || c.status === 'Disbursed')).reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+        const expense = claims.filter(c => c.type === 'Expense' && (c.status === 'Approved' || c.status === 'Disbursed')).reduce((s, c) => s + parseFloat(c.amount || 0), 0);
 
         return [
             { name: 'Travel Claims', value: travel, color: '#f97316' },
@@ -192,6 +192,44 @@ const AdminDashboard = () => {
         const matchesType = reportTypeFilter === 'All' || claim.type === reportTypeFilter;
         return matchesSearch && matchesType;
     });
+
+    // 1-Click Tally / ERP Accounting CSV Export
+    const handleExportTallyCSV = () => {
+        const headers = [
+            "Voucher Date",
+            "Voucher Type",
+            "Expense Ledger Head (Debit)",
+            "Payment Ledger (Credit)",
+            "Amount",
+            "Employee Name",
+            "Department",
+            "UTR / Ref No",
+            "Status",
+            "Narration / Description"
+        ];
+
+        const rows = filteredReportClaims.map(c => [
+            c.paymentDate || c.date,
+            "Payment Voucher",
+            c.category || `${c.type} Expenses`,
+            c.paymentMethod || "Corporate Bank Account",
+            c.amount,
+            c.User?.name || "Employee",
+            c.department || "General",
+            c.utrNumber || "N/A",
+            c.status,
+            `Expense reimbursed to ${c.User?.name || 'staff'} for ${c.title}`
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.map(val => `"${val}"`).join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Tally_ERP_Expense_Export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div ref={containerRef} className="space-y-6">
@@ -413,12 +451,18 @@ const AdminDashboard = () => {
                             />
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={handleExportTallyCSV}
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition-all"
+                            >
+                                <Download className="w-4 h-4" /> Tally / ERP CSV
+                            </button>
                             <button
                                 onClick={handleExportExcel}
                                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition-all"
                             >
-                                <Download className="w-4 h-4" /> Export Excel
+                                <Download className="w-4 h-4" /> Excel Report
                             </button>
                             <button
                                 onClick={handlePrint}

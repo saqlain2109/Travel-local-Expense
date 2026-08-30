@@ -202,6 +202,96 @@ export const api = {
         return response.json();
     },
 
+    // Category Master & Limits
+    getCategories: async () => {
+        const response = await fetch(`${API_URL}/categories`);
+        if (!response.ok) throw new Error('Failed to fetch categories');
+        return response.json();
+    },
+    createCategory: async (data) => {
+        const response = await fetch(`${API_URL}/categories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to create category');
+        }
+        return response.json();
+    },
+    updateCategory: async (id, data) => {
+        const response = await fetch(`${API_URL}/categories/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to update category');
+        }
+        return response.json();
+    },
+    deleteCategory: async (id) => {
+        const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete category');
+        return response.json();
+    },
+
+    // Clarification Workflow
+    requestClarification: async (id, data) => {
+        const response = await fetch(`${API_URL}/claims/${id}/clarify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to request clarification');
+        }
+        return response.json();
+    },
+    respondClarification: async (id, data) => {
+        const response = await fetch(`${API_URL}/claims/${id}/respond-clarification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to submit response');
+        }
+        return response.json();
+    },
+
+    // Finance Disbursement & Payout
+    disburseClaim: async (id, data) => {
+        const response = await fetch(`${API_URL}/claims/${id}/disburse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to disburse claim');
+        }
+        return response.json();
+    },
+
+    // Out-of-Office Delegation
+    setDelegation: async (userId, data) => {
+        const response = await fetch(`${API_URL}/users/${userId}/delegate`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Failed to set delegation');
+        }
+        return response.json();
+    },
+
     getDashboardStats: async (userId, role) => {
         const params = new URLSearchParams();
         if (userId) params.append('userId', userId);
